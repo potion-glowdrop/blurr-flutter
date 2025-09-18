@@ -270,6 +270,7 @@
 // }
 
 import 'dart:async';
+import 'package:blurr/features/group_chat/group_chat_room.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
@@ -571,26 +572,6 @@ class _GroupLobbyBodyState extends State<_GroupLobbyBody> {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// 다음 페이지(그룹 룸) — 선택된 토픽을 전달받아 표시하는 예시
-class GroupRoomPage extends StatelessWidget {
-  final String topic;
-  const GroupRoomPage({super.key, required this.topic});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('그룹 룸: $topic')),
-      body: Center(
-        child: Text(
-          '선택한 주제: $topic',
-          style: TextStyle(fontFamily: 'IBMPlexSansKR', fontSize: 18.sp),
-          textAlign: TextAlign.center,
-        ),
-      ),
     );
   }
 }

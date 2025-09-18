@@ -70,6 +70,7 @@ flutter:
     - assets/lottie/
     - assets/fonts/
     - assets/images/one_on_one/
+    - assets/images/group/
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 
