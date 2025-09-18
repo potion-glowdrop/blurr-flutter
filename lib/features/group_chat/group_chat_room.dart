@@ -1,5 +1,91 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+
+class ParticipantAvatar extends StatelessWidget {
+  final String name;       // 이름 (ex: '새싹')
+  final String image;      // 기본 이미지 경로
+  final String turnImage;  // 턴일 때 이미지 경로
+  final String turn;       // 현재 턴의 이름
+
+  // 위치 값
+  final double? top;
+  final double? left;
+  final double? right;
+  final double? bottom;
+
+  // 크기 조정
+  final double size;       // 기본 사이즈 (ex: 46)
+  final double sizeTurn;   // 턴일 때 사이즈 (ex: 72)
+
+  const ParticipantAvatar({
+    super.key,
+    required this.name,
+    required this.image,
+    required this.turnImage,
+    required this.turn,
+    this.top,
+    this.left,
+    this.right,
+    this.bottom,
+    this.size = 46,
+    this.sizeTurn = 72,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isTurn = (turn == name);
+    final double avatarSize = isTurn ? sizeTurn.w : size.w;
+
+    return Positioned(
+      top: top,
+      left: left,
+      right: right,
+      bottom: bottom,
+      child: Center(
+        child: Column(
+          children: [
+            SizedBox(
+              width: avatarSize,
+              height: avatarSize,
+              child: OverflowBox(
+                maxHeight: isTurn ? (sizeTurn * 1.78).w : (size * 2.3).w,
+                maxWidth: isTurn ? (sizeTurn * 1.78).w : (size * 2.3).w,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10.w),
+                  child: Image.asset(
+                    isTurn ? turnImage : image,
+                    width: isTurn ? (sizeTurn * 1.78).w : (size * 2.3).w,
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(height: 10.h),
+            Container(
+              height: 21.w,
+              padding: EdgeInsets.symmetric(horizontal: 8.w),
+              decoration: BoxDecoration(
+                color: isTurn ? const Color(0xFF2BACFF) : const Color(0xFFFFFFFF),
+                borderRadius: BorderRadius.circular(13.w),
+              ),
+              child: Text(
+                name,
+                style: TextStyle(
+                  color: isTurn ? const Color(0xFFFFFFFF) : const Color(0xFF000000),
+                  fontFamily: 'IBMPlexSansKR',
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 class ParticipantsRow extends StatelessWidget {
   final List<String> participants; // 전체 참가자 이름
   final String activeName;         // 발언자 이름
@@ -119,10 +205,12 @@ class SessionInfoCard extends StatelessWidget {
 class GroupRoomPage extends StatefulWidget {
   final String topic;
   final bool myTurn; // 내 차례인지 여부
+  final String turn;
 
   const GroupRoomPage({
     super.key,
     required this.topic,
+    this.turn = "나비",
     this.myTurn = true,
   });
 
@@ -132,6 +220,8 @@ class GroupRoomPage extends StatefulWidget {
 
 class _GroupRoomPageState extends State<GroupRoomPage> {
   bool _arOn = true; // AR 필터 On/Off 상태
+  String turn = "나비";
+
 
   @override
   Widget build(BuildContext context) {
@@ -159,9 +249,9 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
                         '이번 세션의 당신의 닉네임은 나비입니다. 그룹 대화 방에서는 음성과 표정으로 소통할 수 있습니다.',
                   ),
                   SizedBox(height: 11.h),
-                  const ParticipantsRow(
-                    participants: ['이슬', '나비', '바다', '새싹', '파도'],
-                    activeName: '나비',
+                  ParticipantsRow(
+                    participants: const ['이슬', '나비', '바다', '새싹', '파도'],
+                    activeName: turn,
                   ),
                 ],
               ),
@@ -221,10 +311,90 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
                       ),
                     ),
                   ),
+
                 ],
               ),
             ),
           ),
+          // Positioned(
+          //   top: turn=='새싹'?255.w:275.w,
+          //   left: 0,
+          //   right: 0,
+          //   child: Center(
+          //   child: Column(
+          //     children: [
+          //       SizedBox(
+          //         width: turn=='새싹'?72.w:46.w,
+          //         height: turn=='새싹'?72.w:46.w,
+          //         child: OverflowBox(
+          //           maxHeight: turn=='새싹'?128.w:106.w,
+          //           maxWidth: turn=='새싹'?128.w:106.w,
+          //           child: ClipRRect(
+          //             borderRadius: BorderRadiusGeometry.circular(10.w),
+          //             child: Image.asset(turn=='새싹'?'assets/images/group/saessak_turn.png':'assets/images/group/saessak.png', width: turn=='새싹'?128.w:106.w,)),
+          //         ),
+          //       ),
+          //       SizedBox(height: 10.h,),
+          //       Container(
+          //         height: 21.w,
+          //         padding: EdgeInsets.symmetric(horizontal: 8.w),
+          //         decoration: BoxDecoration(
+          //           color: turn=='새싹'?Color(0xFF2BACFF):Color(0xFFFFFFFF),
+          //           borderRadius: BorderRadius.circular(13.w)
+          //         ),
+          //         child: Text('새싹', style: TextStyle(color: turn=='새싹'?Color(0xFFFFFFFF):Color(0xFF000000),fontFamily: 'IBMPlexSansKR', fontSize: 14.sp,fontWeight: FontWeight.w500),),
+          //       )
+          //     ],
+          //   ))),
+
+          ParticipantAvatar(
+            name: '새싹',
+            image: 'assets/images/group/saessak.png',
+            turnImage: 'assets/images/group/saessak_turn.png',
+            turn: turn,
+            top: turn == '새싹' ? 255.w : 275.w,
+            left: 0,
+            right: 0,
+          ),
+          ParticipantAvatar(
+            name: '파도',
+            image: 'assets/images/group/pado.png',
+            turnImage: 'assets/images/group/pado_turn.png',
+            turn: turn,
+            top: turn == '파도' ? 354.w : 374.w,
+            left: 250.w,
+            right: 0,
+          ),
+          ParticipantAvatar(
+            name: '나비',
+            image: 'assets/images/group/nabi.png',
+            turnImage: 'assets/images/group/nabi_turn.png',
+            turn: turn,
+            top: turn == '나비' ? 354.w : 374.w,
+            left: 0,
+            right: 250.w,
+          ),
+          ParticipantAvatar(
+            name: '이슬',
+            image: 'assets/images/group/iseul.png',
+            turnImage: 'assets/images/group/iseul_turn.png',
+            turn: turn,
+            top: turn == '이슬' ? 495.w : 510.w,
+            left: 140.w,
+            right: 0,
+          ),
+          ParticipantAvatar(
+            name: '바람',
+            image: 'assets/images/group/baram.png',
+            turnImage: 'assets/images/group/baram_turn.png',
+            turn: turn,
+            top: turn == '바람' ? 485.w : 500.w,
+            left: 0,
+            right: 150.w,
+          ),
+
+
+
 
           // 하단 컨트롤 박스
           Positioned(
