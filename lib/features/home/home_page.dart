@@ -1,3 +1,4 @@
+import 'package:blurr/features/home/group_chat_lobby.dart';
 import 'package:blurr/features/home/one_on_one_lobby.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -176,7 +177,20 @@ class _MainContentPageState extends State<MainContentPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset('assets/images/icons/15min.png', width: 136.w),
+              GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      PageRouteBuilder(
+                        pageBuilder: (_, __, ___) => const LobbyGroupPage(),
+                        transitionDuration: const Duration(milliseconds: 220),
+                        reverseTransitionDuration: const Duration(milliseconds: 180),
+                        transitionsBuilder: (_, animation, __, child) =>
+                            FadeTransition(opacity: animation, child: child),
+                      ),
+                    );
+                  },
+                child: Image.asset('assets/images/icons/15min.png', width: 136.w)),
               SizedBox(width: 19.w),
               Image.asset('assets/images/icons/30min.png', width: 136.w),
             ],

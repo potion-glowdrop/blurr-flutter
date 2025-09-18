@@ -1,4 +1,5 @@
 
+import 'package:blurr/features/one_on_one_chat/chat_done.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'dart:math' as math;
@@ -292,7 +293,15 @@ Widget camera_box(String name, {bool isSelf = false}) {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () => Navigator.pop(context),
+                onTap: () {
+                  Navigator.pushReplacement(context, 
+                    PageRouteBuilder(pageBuilder: (_, __, ___)=> const OneOnOneDone(),
+                    transitionDuration: const Duration(milliseconds: 220),
+                    reverseTransitionDuration: const Duration(milliseconds: 180),
+                    transitionsBuilder: (_, a, __, child)=> FadeTransition(opacity: a, child: child,)
+                    )
+                  );
+                },
                 customBorder: const CircleBorder(),
                 child: Stack(
                   fit: StackFit.expand,
