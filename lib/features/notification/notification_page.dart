@@ -20,7 +20,7 @@ class NotificationPage extends StatelessWidget {
 
           // 뒤로가기 버튼
           Positioned(
-            left: 37.w,   // ← ScreenUtil은 w/h 반대로 쓰지 않도록 주의!
+            left: 23.w,   // ← ScreenUtil은 w/h 반대로 쓰지 않도록 주의!
             top: 53.h,
             child: GestureDetector(
               onTap: () => Navigator.pop(context),
