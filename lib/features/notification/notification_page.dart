@@ -1,85 +1,3 @@
-// import 'package:flutter/material.dart';
-// import 'package:flutter_screenutil/flutter_screenutil.dart';
-
-// class NotificationPage extends StatelessWidget {
-//   const NotificationPage({super.key});
-
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       body: Stack(
-//         children: [
-//           // 배경
-//           Positioned.fill(
-//             child: Image.asset(
-//               'assets/illustrations/widget_background.png',
-//               fit: BoxFit.cover,
-//             ),
-//           ),
-
-//           Positioned(
-//             top: 96.h,
-//             left: 0,
-//             right: 0,
-//             child: Center(child: Column(
-//               mainAxisAlignment: MainAxisAlignment.center,
-//               children: [
-//                 Text('기록', style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w400, fontFamily: 'IBMPlexSansKR'),),
-//                 SizedBox(height: 14.h,),
-//                 Row(
-//                   mainAxisAlignment: MainAxisAlignment.center,
-//                   children: [
-//                   Stack(
-//                     children: [
-//                       Image.asset('assets/images/icons/toggle_btn_selected.png', width: 101.w, ),
-//                       Positioned(
-//                         right: 0,
-//                         left: 0,
-//                         top: 0,
-//                         bottom: 0,
-//                         child: Center(child: Text('그룹 상담', style: TextStyle(fontWeight: FontWeight.w400, fontFamily: 'IBMPlexSansKr', fontSize: 16.sp, color: Color(0xFF17A1FA),  ) )))
-//                     ],
-//                   ),
-//                   Stack(
-//                     children: [
-//                       Image.asset('assets/images/icons/toggle_btn_unselected.png', width: 101.w, ),
-//                       Positioned(
-//                         right: 0,
-//                         left: 0,
-//                         bottom: 0,
-//                         top: 0,
-//                         child: Text('내담록', style: TextStyle(fontWeight: FontWeight.w400, fontFamily: 'IBMPlexSansKr', fontSize: 16.sp, color: Color(0xFF616161) ),))
-//                     ],
-//                   ),
-//                 ],)
-
-
-//               ],
-//             ),)
-//           ),
-
-//           // 뒤로가기 버튼
-//           Positioned(
-//             left: 23.w,   // ← ScreenUtil은 w/h 반대로 쓰지 않도록 주의!
-//             top: 53.h,
-//             child: GestureDetector(
-//               onTap: () => Navigator.pop(context),
-//               child: SizedBox(
-//                 width: 44.w,
-//                 height: 44.w,
-//                 child: Image.asset(
-//                   'assets/images/icons/back_btn.png',
-//                   fit: BoxFit.contain,
-//                 ),
-//               ),
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
 
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -97,11 +15,16 @@ class _NotificationPageState extends State<NotificationPage> {
   Widget _tabContent() {
     return SizedBox(
       width: 327.w,
-      height: 663.h,
+      height: 750.h,
       child: SingleChildScrollView(
         child:
         Column(
           children: [
+            alert(),
+            alert(),
+            alert(),
+            alert(),
+            alert(),
             alert(),
             alert(),
             alert(),

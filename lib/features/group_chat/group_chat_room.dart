@@ -9,6 +9,7 @@ class ParticipantAvatar extends StatelessWidget {
   final String image;      // 기본 이미지 경로
   final String turnImage;  // 턴일 때 이미지 경로
   final String turn;       // 현재 턴의 이름
+  final String? badge;
 
   // 위치 값
   final double? top;
@@ -32,56 +33,88 @@ class ParticipantAvatar extends StatelessWidget {
     this.bottom,
     this.size = 46,
     this.sizeTurn = 72,
+    this.badge,
   });
 
   @override
   Widget build(BuildContext context) {
     final bool isTurn = (turn == name);
     final double avatarSize = isTurn ? sizeTurn.w : size.w;
+    final bool hasBadge = (badge?.trim().isNotEmpty ?? false);
 
     return Positioned(
       top: top,
       left: left,
       right: right,
       bottom: bottom,
-      child: Center(
-        child: Column(
-          children: [
-            SizedBox(
-              width: avatarSize,
-              height: avatarSize,
-              child: OverflowBox(
-                maxHeight: isTurn ? (sizeTurn * 1.78).w : (size * 2.3).w,
-                maxWidth: isTurn ? (sizeTurn * 1.78).w : (size * 2.3).w,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10.w),
-                  child: Image.asset(
-                    isTurn ? turnImage : image,
-                    width: isTurn ? (sizeTurn * 1.78).w : (size * 2.3).w,
+      child: Column(
+        children: [
+          Center(
+            child: Column(
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    SizedBox(
+                      width: avatarSize,
+                      height: avatarSize,
+                      child: OverflowBox(
+                        maxHeight: isTurn ? (sizeTurn * 1.78).w : (size * 2.3).w,
+                        maxWidth: isTurn ? (sizeTurn * 1.78).w : (size * 2.3).w,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10.w),
+                          child: Image.asset(
+                            isTurn ? turnImage : image,
+                            width: isTurn ? (sizeTurn * 1.78).w : (size * 2.3).w,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if(hasBadge)Positioned(
+                    right: -5.w,
+                    top: 0,
+                    child: 
+                      Container(
+                        width: 22.w, height: 22.w, 
+                        decoration: BoxDecoration( 
+                          color: Color(0xFFFFFFFF), 
+                          borderRadius: BorderRadius.circular(11.w),
+                          boxShadow: [
+                            BoxShadow(
+                              offset: Offset(1, 1),
+                              blurRadius: 4.w,
+                              color: isTurn?Color(0xFF2BACFF):Color(0xFF000000).withAlpha(7)
+                            )
+                          ]
+                          ),
+                          child: Center(child: Text(badge??'', style: TextStyle(fontSize: 14.sp),)),
+                          )
+                          ),
+
+                  ],
+                ),
+                SizedBox(height: 10.h),
+                Container(
+                  height: 21.w,
+                  padding: EdgeInsets.symmetric(horizontal: 8.w),
+                  decoration: BoxDecoration(
+                    color: isTurn ? const Color(0xFF2BACFF) : const Color(0xFFFFFFFF),
+                    borderRadius: BorderRadius.circular(13.w),
+                  ),
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      color: isTurn ? const Color(0xFFFFFFFF) : const Color(0xFF000000),
+                      fontFamily: 'IBMPlexSansKR',
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-            SizedBox(height: 10.h),
-            Container(
-              height: 21.w,
-              padding: EdgeInsets.symmetric(horizontal: 8.w),
-              decoration: BoxDecoration(
-                color: isTurn ? const Color(0xFF2BACFF) : const Color(0xFFFFFFFF),
-                borderRadius: BorderRadius.circular(13.w),
-              ),
-              child: Text(
-                name,
-                style: TextStyle(
-                  color: isTurn ? const Color(0xFFFFFFFF) : const Color(0xFF000000),
-                  fontFamily: 'IBMPlexSansKR',
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -150,6 +183,7 @@ class SessionInfoCard extends StatelessWidget {
     required this.text,
   });
 
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -210,7 +244,7 @@ class GroupRoomPage extends StatefulWidget {
   const GroupRoomPage({
     super.key,
     required this.topic,
-    this.turn = "나비",
+    this.turn = "바람",
     this.myTurn = true,
   });
 
@@ -220,8 +254,10 @@ class GroupRoomPage extends StatefulWidget {
 
 class _GroupRoomPageState extends State<GroupRoomPage> {
   bool _arOn = true; // AR 필터 On/Off 상태
-  String turn = "나비";
-
+  String turn = "바람";
+  final String myName = "나비";
+  String _myBadge = '☁️';
+  final List<String> _emojis = const ['☀️','☁️','☔️','⚡️','🌪️','🌈','❄️'];
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +286,7 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
                   ),
                   SizedBox(height: 11.h),
                   ParticipantsRow(
-                    participants: const ['이슬', '나비', '바다', '새싹', '파도'],
+                    participants: const ['이슬', '나비', '바람', '새싹', '파도'],
                     activeName: turn,
                   ),
                 ],
@@ -355,6 +391,7 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
             top: turn == '새싹' ? 255.w : 275.w,
             left: 0,
             right: 0,
+            badge: '새싹' == myName? _myBadge: null,
           ),
           ParticipantAvatar(
             name: '파도',
@@ -364,6 +401,8 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
             top: turn == '파도' ? 354.w : 374.w,
             left: 250.w,
             right: 0,
+            badge: '파도' == myName? _myBadge: null,
+
           ),
           ParticipantAvatar(
             name: '나비',
@@ -373,6 +412,8 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
             top: turn == '나비' ? 354.w : 374.w,
             left: 0,
             right: 250.w,
+            badge: '나비' == myName? _myBadge: null,
+
           ),
           ParticipantAvatar(
             name: '이슬',
@@ -382,6 +423,8 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
             top: turn == '이슬' ? 495.w : 510.w,
             left: 140.w,
             right: 0,
+            badge: '이슬' == myName? _myBadge: null,
+
           ),
           ParticipantAvatar(
             name: '바람',
@@ -391,6 +434,8 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
             top: turn == '바람' ? 485.w : 500.w,
             left: 0,
             right: 150.w,
+            badge: '바람' == myName? _myBadge: null,
+
           ),
 
 
@@ -427,10 +472,35 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
                         maxWidth: 356.w,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: Image.asset(
-                            'assets/images/group/textbox.png',
-                            width: 356.w,
-                            height: 51.w,
+                          child: Stack(
+                            children: [
+                              Image.asset(
+                                'assets/images/group/textbox.png',
+                                width: 356.w,
+                                height: 51.w,
+                              ),
+                              Center(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 40.w),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: _emojis.map((e) {
+                                      return GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _myBadge = e; // 선택한 이모지를 내 아바타 배지로 갱신
+                                          });
+                                        },
+                                        child: Text(
+                                          e,
+                                          style: TextStyle(fontSize: 16.sp),
+                                        ),
+                                      );
+                                    }).toList(), // ✅ 바로 넣어주면 됨
+                                  ),
+                                ),
+                              )
+                            ],
                           ),
                         ),
                       ),
