@@ -76,6 +76,7 @@ flutter:
     - assets/fonts/
     - assets/images/one_on_one/
     - assets/images/group/
+    - assets/images/mypage/
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 
