@@ -245,7 +245,7 @@ class GroupRoomPage extends StatefulWidget {
     super.key,
     required this.topic,
     this.turn = "바람",
-    this.myTurn = true,
+    this.myTurn = false,
   });
 
   @override
@@ -449,7 +449,7 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
             child: Center(
               child: Container(
                 width: 393.w,
-                height: 241.h,
+                height: 210.h,
                 padding: EdgeInsets.only(top: 21.h),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFFFFF),
@@ -505,10 +505,10 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
                         ),
                       ),
                     ),
-                    SizedBox(height: 26.h),
+                    SizedBox(height: 35.h),
 
                     // 내 차례일 때와 아닐 때 UI 분기
-                    if (widget.myTurn)
+                    if (!widget.myTurn)
                       SizedBox(
                         width: 193.w,
                         child: Row(

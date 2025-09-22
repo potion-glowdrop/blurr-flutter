@@ -40,6 +40,8 @@ dependencies:
   livekit_client: ^2.2.0
   camera: ^0.11.2
   flutter_webrtc: ^0.10.6
+  google_mlkit_face_detection: ^0.13.1
+  google_mlkit_commons: ^0.11.0
 
 dev_dependencies:
   flutter_test:
