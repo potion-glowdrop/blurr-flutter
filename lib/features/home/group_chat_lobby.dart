@@ -270,7 +270,7 @@
 // }
 
 import 'dart:async';
-import 'package:blurr/features/group_chat/group_chat_room.dart';
+import 'package:blurr/features/group_chat/group_room_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 

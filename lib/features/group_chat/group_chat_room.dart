@@ -1,274 +1,17 @@
 import 'dart:math' as math;
 
+import 'package:blurr/features/group_chat/control_bar.dart';
 import 'package:blurr/features/group_chat/face_avatar_painter.dart';
 import 'package:blurr/features/group_chat/mouth_state.dart';
+import 'package:blurr/features/group_chat/participant_avatar.dart';
+import 'package:blurr/features/group_chat/participant_row.dart';
+import 'package:blurr/features/group_chat/session_info_card.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
-class ParticipantAvatar extends StatelessWidget {
-  final String name;       // 이름 (ex: '새싹')
-  final String image;      // 기본 이미지 경로
-  final String turnImage;  // 턴일 때 이미지 경로
-  final String turn;       // 현재 턴의 이름
-  final String? badge;
-
-  // 위치 값
-  final double? top;
-  final double? left;
-  final double? right;
-  final double? bottom;
-
-  // 크기 조정
-  final double size;       // 기본 사이즈 (ex: 46)
-  final double sizeTurn;   // 턴일 때 사이즈 (ex: 72)
-
-  final bool arOn;
-  final bool isSelf;
-
-  //ML 결과
-  final MouthState? mouthStateOverride;
-  final double? mouthOpenRatioOverride;
-  final bool? leftEyeOpenOverride;
-  final bool? rightEyeOpenOverride;
-
-  const ParticipantAvatar({
-    super.key,
-    required this.name,
-    required this.image,
-    required this.turnImage,
-    required this.turn,
-    this.top,
-    this.left,
-    this.right,
-    this.bottom,
-    this.size = 46,
-    this.sizeTurn = 72,
-    this.badge,
-    this.arOn = false,
-    this.isSelf = false,
-    this.mouthOpenRatioOverride,
-    this.mouthStateOverride,
-    this.leftEyeOpenOverride,
-    this.rightEyeOpenOverride
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isTurn = (turn == name);
-    final double avatarSize = isTurn ? sizeTurn.w : size.w;
-    final bool hasBadge = (badge?.trim().isNotEmpty ?? false);
-
-    MouthState mouth = (isSelf && isTurn) ? MouthState.talking : MouthState.neutral;
-    double ratio = (mouth == MouthState.talking) ? 0.22 : 0.02;
-    bool leftOpen = true;
-    bool rightOpen = true;
-
-    mouth = mouthStateOverride ?? mouth;
-    ratio = mouthOpenRatioOverride ?? ratio;
-    leftOpen = leftEyeOpenOverride ?? leftOpen;
-    rightOpen = rightEyeOpenOverride ?? rightOpen;
-
-    return Positioned(
-      top: top,
-      left: left,
-      right: right,
-      bottom: bottom,
-      child: Column(
-        children: [
-          Center(
-            child: Column(
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    SizedBox(
-                      width: avatarSize,
-                      height: avatarSize,
-                      child: OverflowBox(
-                        maxHeight: isTurn ? (sizeTurn * 1.78).w : (size * 2.3).w,
-                        maxWidth: isTurn ? (sizeTurn * 1.78).w : (size * 2.3).w,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10.w),
-                          child: Image.asset(
-                            isTurn ? turnImage : image,
-                            width: isTurn ? (sizeTurn * 1.78).w : (size * 2.3).w,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if(isSelf && arOn)
-                      Positioned.fill(child: IgnorePointer(child: CustomPaint(
-                        painter: FaceAvatarPainter(mouthState : mouth, mouthOpenRatio: ratio, leftEyeOpen: leftOpen, rightEyeOpen: rightOpen),
-                      ),)),
-                    if(hasBadge)Positioned(
-                    right: -5.w,
-                    top: 0,
-                    child: 
-                      Container(
-                        width: 22.w, height: 22.w, 
-                        decoration: BoxDecoration( 
-                          color: Color(0xFFFFFFFF), 
-                          borderRadius: BorderRadius.circular(11.w),
-                          boxShadow: [
-                            BoxShadow(
-                              offset: Offset(1, 1),
-                              blurRadius: 4.w,
-                              color: isTurn?Color(0xFF2BACFF):Color(0xFF000000).withAlpha(7)
-                            )
-                          ]
-                          ),
-                          child: Center(child: Text(badge??'', style: TextStyle(fontSize: 14.sp),)),
-                          )
-                          ),
-
-                  ],
-                ),
-                SizedBox(height: 10.h),
-                Container(
-                  height: 21.w,
-                  padding: EdgeInsets.symmetric(horizontal: 8.w),
-                  decoration: BoxDecoration(
-                    color: isTurn ? const Color(0xFF2BACFF) : const Color(0xFFFFFFFF),
-                    borderRadius: BorderRadius.circular(13.w),
-                  ),
-                  child: Text(
-                    name,
-                    style: TextStyle(
-                      color: isTurn ? const Color(0xFFFFFFFF) : const Color(0xFF000000),
-                      fontFamily: 'IBMPlexSansKR',
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-class ParticipantsRow extends StatelessWidget {
-  final List<String> participants; // 전체 참가자 이름
-  final String activeName;         // 발언자 이름
-
-  const ParticipantsRow({
-    super.key,
-    required this.participants,
-    required this.activeName,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 320.w,
-      height: 25.h,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: participants.map((name) {
-          final isActive = name == activeName;
-
-          if (isActive) {
-            return Row(
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontFamily: 'IBMPlexSansKR',
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF17A1FA), // 파란색
-                  ),
-                ),
-                SizedBox(width: 3.w),
-                Image.asset(
-                  'assets/images/icons/mic.png',
-                  width: 12.w,
-                ),
-              ],
-            );
-          } else {
-            return Text(
-              name,
-              style: TextStyle(
-                fontFamily: 'IBMPlexSansKR',
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w400,
-                color: const Color(0xFFBDBDBD), // 회색
-              ),
-            );
-          }
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class SessionInfoCard extends StatelessWidget {
-  final String text; // 표시할 문구
-
-  const SessionInfoCard({
-    super.key,
-    required this.text,
-  });
-
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 353.w,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
-        borderRadius: BorderRadius.circular(10.w),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF000000).withAlpha(20),
-            blurRadius: 4,
-            offset: const Offset(1, 1),
-          )
-        ],
-      ),
-      padding: EdgeInsets.symmetric(vertical: 21.h, horizontal: 16.w),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          SizedBox(
-            width: 44.w,
-            height: 44.w,
-            child: OverflowBox(
-              maxWidth: 104.w,
-              maxHeight: 104.w,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10.w),
-                child: Image.asset(
-                  'assets/images/icons/ai_host.png',
-                  width: 104.w,
-                  height: 104.w,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 260.w,
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 14.sp,
-                fontFamily: 'IBMPlexSansKR',
-                fontWeight: FontWeight.w300,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 class GroupRoomPage extends StatefulWidget {
   final String topic;
   final bool myTurn; // 내 차례인지 여부
@@ -986,116 +729,157 @@ double _mouthOpenRatioSmartOrZero(Face f) {
 
           ),
 
+        // ...
+        // Positioned(
+        //   bottom: 0,
+        //   left: 0,
+        //   right: 0,
+        //   child: Center(
+        //     child: ControlBar(
+        //       myTurn: widget.myTurn,
+        //       arOn: _arOn,
+        //       onToggleAr: _toggleAr,
+        //       onPass: () {},        // TODO
+        //       onProlong: () {},     // TODO
+        //       onEnd: () {},         // TODO
+        //       emo
+        //     ),
+        //   ),
+        // ),
+        // 하단 컨트롤 바
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: ControlBar(
+              myTurn: widget.myTurn,
+              arOn: _arOn,
+              onToggleAr: _toggleAr,
+              onPass: () {},        // TODO
+              onProlong: () {},     // TODO
+              onEnd: () {},         // TODO
 
-
-
-          // 하단 컨트롤 박스
-          Positioned(
-            bottom: 0.h,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                width: 393.w,
-                height: 210.h,
-                padding: EdgeInsets.only(top: 21.h),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFFFF),
-                  borderRadius: BorderRadius.circular(44.w),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF000000).withAlpha(15),
-                      offset: const Offset(1, 1),
-                      blurRadius: 2.7,
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: 331.w,
-                      height: 29.h,
-                      child: OverflowBox(
-                        maxHeight: 51.w,
-                        maxWidth: 356.w,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Stack(
-                            children: [
-                              Image.asset(
-                                'assets/images/group/textbox.png',
-                                width: 356.w,
-                                height: 51.w,
-                              ),
-                              Center(
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 40.w),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: _emojis.map((e) {
-                                      return GestureDetector(
-                                        onTap: () {
-                                          setState(() {
-                                            _myBadge = e; // 선택한 이모지를 내 아바타 배지로 갱신
-                                          });
-                                        },
-                                        child: Text(
-                                          e,
-                                          style: TextStyle(fontSize: 16.sp),
-                                        ),
-                                      );
-                                    }).toList(), // ✅ 바로 넣어주면 됨
-                                  ),
-                                ),
-                              )
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 35.h),
-
-                    // 내 차례일 때와 아닐 때 UI 분기
-                    if (widget.myTurn)
-                      SizedBox(
-                        width: 193.w,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _ArToggleButton(
-                              arOn: _arOn,
-                              onTap: _toggleAr,
-                            ),
-                            _IconButtonImage(
-                              asset: 'assets/images/icons/pass.png',
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      SizedBox(
-                        width: 277.w,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _ArToggleButton(
-                              arOn: _arOn,
-                              onTap: _toggleAr,
-                            ),
-                            _IconButtonImage(
-                              asset: 'assets/images/icons/prolong.png',
-                            ),
-                            _IconButtonImage(
-                              asset: 'assets/images/icons/end.png',
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+              // ✅ 이모지 연동 추가
+              emojis: _emojis,
+              selectedEmoji: _myBadge,
+              onEmojiSelected: (e) {
+                setState(() {
+                  _myBadge = e; // 배지에 즉시 반영
+                });
+              },
+              // showEmojiBar: true, // 숨기고 싶으면 false
             ),
           ),
+        ),
+
+          // // 하단 컨트롤 박스
+          // Positioned(
+          //   bottom: 0.h,
+          //   left: 0,
+          //   right: 0,
+          //   child: Center(
+          //     child: Container(
+          //       width: 393.w,
+          //       height: 210.h,
+          //       padding: EdgeInsets.only(top: 21.h),
+          //       decoration: BoxDecoration(
+          //         color: const Color(0xFFFFFFFF),
+          //         borderRadius: BorderRadius.circular(44.w),
+          //         boxShadow: [
+          //           BoxShadow(
+          //             color: const Color(0xFF000000).withAlpha(15),
+          //             offset: const Offset(1, 1),
+          //             blurRadius: 2.7,
+          //           ),
+          //         ],
+          //       ),
+          //       child: Column(
+          //         children: [
+          //           SizedBox(
+          //             width: 331.w,
+          //             height: 29.h,
+          //             child: OverflowBox(
+          //               maxHeight: 51.w,
+          //               maxWidth: 356.w,
+          //               child: ClipRRect(
+          //                 borderRadius: BorderRadius.circular(10),
+          //                 child: Stack(
+          //                   children: [
+          //                     Image.asset(
+          //                       'assets/images/group/textbox.png',
+          //                       width: 356.w,
+          //                       height: 51.w,
+          //                     ),
+          //                     Center(
+          //                       child: Padding(
+          //                         padding: EdgeInsets.symmetric(horizontal: 40.w),
+          //                         child: Row(
+          //                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //                           children: _emojis.map((e) {
+          //                             return GestureDetector(
+          //                               onTap: () {
+          //                                 setState(() {
+          //                                   _myBadge = e; // 선택한 이모지를 내 아바타 배지로 갱신
+          //                                 });
+          //                               },
+          //                               child: Text(
+          //                                 e,
+          //                                 style: TextStyle(fontSize: 16.sp),
+          //                               ),
+          //                             );
+          //                           }).toList(), // ✅ 바로 넣어주면 됨
+          //                         ),
+          //                       ),
+          //                     )
+          //                   ],
+          //                 ),
+          //               ),
+          //             ),
+          //           ),
+          //           SizedBox(height: 35.h),
+
+          //           // 내 차례일 때와 아닐 때 UI 분기
+          //           if (widget.myTurn)
+          //             SizedBox(
+          //               width: 193.w,
+          //               child: Row(
+          //                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //                 children: [
+          //                   _ArToggleButton(
+          //                     arOn: _arOn,
+          //                     onTap: _toggleAr,
+          //                   ),
+          //                   _IconButtonImage(
+          //                     asset: 'assets/images/icons/pass.png',
+          //                   ),
+          //                 ],
+          //               ),
+          //             )
+          //           else
+          //             SizedBox(
+          //               width: 277.w,
+          //               child: Row(
+          //                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //                 children: [
+          //                   _ArToggleButton(
+          //                     arOn: _arOn,
+          //                     onTap: _toggleAr,
+          //                   ),
+          //                   _IconButtonImage(
+          //                     asset: 'assets/images/icons/prolong.png',
+          //                   ),
+          //                   _IconButtonImage(
+          //                     asset: 'assets/images/icons/end.png',
+          //                   ),
+          //                 ],
+          //               ),
+          //             ),
+          //         ],
+          //       ),
+          //     ),
+          //   ),
+          // ),
 
           // 뒤로가기 버튼
           Positioned(

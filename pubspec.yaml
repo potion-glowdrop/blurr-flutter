@@ -69,7 +69,7 @@ flutter:
   assets:
     - assets/images/
     - assets/images/icons/
-    - assets/images/onboarding/
+    # - assets/images/onboarding/
     - assets/images/home/
     - assets/illustrations/
     - assets/lottie/
