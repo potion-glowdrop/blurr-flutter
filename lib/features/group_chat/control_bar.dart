@@ -77,10 +77,10 @@ SizedBox(
                   children: emojis.map((e) {
                     final bool isSelected = (selectedEmoji != null && selectedEmoji == e);
                     return SizedBox(
-                      width: 28.w,  // 🔹 탭 영역 확보
-                      height: 28.h, // 🔹 탭 영역 확보
+                      width: 28.w,  
+                      height: 28.h, 
                       child: GestureDetector(
-                        behavior: HitTestBehavior.opaque, // 🔹 빈 공간도 탭 처리
+                        behavior: HitTestBehavior.opaque,
                         onTap: () => onEmojiSelected?.call(e),
                         child: AnimatedScale(
                           duration: const Duration(milliseconds: 120),
@@ -114,7 +114,7 @@ SizedBox(
             SizedBox(height: 35.h),
 
           // ==== 버튼 영역 ====
-          if (myTurn)
+          if (!myTurn)
             SizedBox(
               width: 193.w,
               child: Row(

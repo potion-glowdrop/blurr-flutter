@@ -107,8 +107,8 @@ class ParticipantAvatar extends StatelessWidget {
                       ),
                     if (hasBadge)
                       Positioned(
-                        right: -5.w,
-                        top: 0,
+                        right: -8.w,
+                        top: -3.h,
                         child: Container(
                           width: 22.w,
                           height: 22.w,

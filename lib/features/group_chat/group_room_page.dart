@@ -1,5 +1,6 @@
 // lib/features/group_chat/group_room_page.dart
 import 'package:blurr/features/group_chat/control_bar.dart';
+import 'package:blurr/features/group_chat/group_room_done.dart';
 import 'package:blurr/features/group_chat/mouth_state.dart';
 import 'package:blurr/features/group_chat/participant_avatar.dart';
 import 'package:blurr/features/group_chat/participant_row.dart';
@@ -29,8 +30,16 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
   // === 단순 상태 ===
   String turn = "새싹";
   final String myName = "나비";
-  String _myBadge = '☁️';
+  String? _myBadge = '';
   final List<String> _emojis = const ['☀️','☁️','☔️','⚡️','🌪️','🌈','❄️'];
+  final Map<String, List<String>> emojiSets = {
+    '날씨': ['☀️','☁️','☔️','⚡️','🌪️','🌈','❄️'],
+    '감정': ['😊','😢','😡','😱','😌','😐','😭'],
+    '리액션': ['👍','👎','👏','💬','❓','😮','❤️'],
+    '에너지': ['💪','😴','🥱','🤯','🔥','🌱','🚀'],
+    '공감': ['🫂','🤝','🙌','💖','👂','😔','🫶'],
+  };
+  double _badgeOpacity = 1.0;
 
   // === AR 서비스 ===
   final FaceTrackerService _tracker = FaceTrackerService();
@@ -244,17 +253,32 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
             right: 0,
             child: Center(
               child: ControlBar(
-                myTurn: widget.myTurn,
+                myTurn: turn == myName,
                 arOn: _tracker.arOn,
                 onToggleAr: _toggleAr,
                 onPass: () {},        
                 onProlong: () {},     
                 onEnd: () {},
-                emojis : _emojis,
+                emojis : emojiSets['감정']!,
                 selectedEmoji: _myBadge,
-                onEmojiSelected: (e){
-                  setState(()=>_myBadge=e);
-                },        
+                onEmojiSelected: (e) {
+                  setState(() {
+                    _myBadge = e;
+                    _badgeOpacity = 1.0; // 처음엔 보여지도록
+                  });
+
+                  Future.delayed(const Duration(seconds: 4), () {
+                    if (mounted && _myBadge == e) {
+                      setState(() => _badgeOpacity = 0.0); // 서서히 사라지게
+                    }
+                  });
+
+                  Future.delayed(const Duration(seconds: 5), () {
+                    if (mounted && _myBadge == e) {
+                      setState(() => _myBadge = null); // 완전히 제거
+                    }
+                  });
+                }
                 
               ),
             ),
@@ -265,7 +289,20 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
             left: 23.w,
             top: 53.h,
             child: GestureDetector(
-              onTap: () => Navigator.pop(context),
+              onTap:(){
+                Navigator.pushReplacement(
+                    context,
+                    PageRouteBuilder(
+                      pageBuilder: (_, __, ___) => const GroupDone(),
+                      transitionDuration: const Duration(milliseconds: 220),
+                      reverseTransitionDuration:
+                          const Duration(milliseconds: 180),
+                      transitionsBuilder: (_, a, __, child) =>
+                          FadeTransition(opacity: a, child: child),
+                    ),
+                  );
+
+              },
               child: SizedBox(
                 width: 44.w,
                 height: 44.w,
