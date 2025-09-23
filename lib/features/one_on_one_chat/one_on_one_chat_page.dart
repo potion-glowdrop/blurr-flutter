@@ -1446,7 +1446,9 @@ final double effAbove = ((_emaMouth - _mouthBaseline) > _noiseFloor)
                 return CustomPaint(
                   painter: _FaceDotsPainter(faces: _faces, imageSize: imgSize, widgetSize: widgetSize, mirror: true, sticker:_faceSticker, mouthState: _mouthState, mouthOpenRatio: _mouthOpenRatio)
                 );
-              },)
+              },
+              
+              )
               // LayoutBuilder(
               //   builder: (context, c) {
               //     final imgSize = Size(
