@@ -399,16 +399,17 @@ class _RecordPageState extends State<RecordPage> {
   Widget _tabContent() {
     return SizedBox(
       width: 327.w,
-      // height: 663.h,
+      height: 663.h,
       child: SingleChildScrollView(
         child: _currentTab == 0?Column(
           children: [
-            alert(),
-            alert(),
-            alert(),
-            alert(),
-            alert(),
-            alert(),
+            alert('2025. 09. 20.', '불안', '21:15', '자꾸만 불확실한 미래가 떠올라서 마음이 답답했지만, 누군가 비슷한 고민을 말해줘서 위로가 되었다.'),
+            alert('2025. 09. 16.', '소속감', '19:47', '내 얘기를 조심스레 꺼냈는데, 고개를 끄덕여주는 사람들이 있어 혼자라고 느끼지 않게 되었다.'),
+            alert('2025. 09. 12.', '애도', '22:00', '사람들은 각자의 방식으로 이별을 견디고 있었다. 말하지 못했던 감정을 처음으로 말해봤다.'),
+            alert('2025. 09. 09.', '관계 회복', '20:30', '상대방을 이해하고 싶은 마음과, 내 상처 사이에서 계속 맴돌고 있었던 나를 알아챘다.'),
+            alert('2025. 09. 06.', '1인 가구 외로움', '18:05', '하루 종일 아무 말도 안하고 지냈던 날, 여기서 목소리를 내니 조금 따뜻해졌다.'),
+            alert('2025. 08. 31.', '중독 회복', '21:45', '부끄러움이 먼저 떠올랐지만, 오늘 나눈 대화 속에서 다시 새로 시작할 용기를 얻었다.'),
+            alert('2025. 08. 27.', '사회적 고립', '22:12', '말을 하기까지 시간이 좀 걸렸지만, 누군가가 "나도 그래"라고 해줘서 울컥했다.')
 
             ],
           
@@ -552,14 +553,14 @@ class _RecordPageState extends State<RecordPage> {
     );
   }
 
-  Widget alert(){
+  Widget alert(String date, String topic, String time, String reflection){
     return Column(
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
             SizedBox(width: 12.w,),
-            Text('2025. 09. 22.',style: TextStyle(fontSize: 12.sp, color: Color(0xFF616161) ) ),
+            Text(date,style: TextStyle(fontSize: 12.sp, color: Color(0xFF616161) ) ),
           ],
         ),
         SizedBox(height: 4.h,),
@@ -571,11 +572,11 @@ class _RecordPageState extends State<RecordPage> {
             mainAxisAlignment: MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('혼자라는 느낌', style: TextStyle(fontSize: 14.sp, fontFamily: 'IBMPlexSansKR', color: Color(0xFF75A97A), fontWeight: FontWeight.w400),),
+              Text(topic, style: TextStyle(fontSize: 14.sp, fontFamily: 'IBMPlexSansKR', color: Color(0xFF75A97A), fontWeight: FontWeight.w400),),
               SizedBox(height: 5.h,),
-              Text('22:31', style: TextStyle(fontSize: 14.sp, fontFamily: 'IBMPlexSansKR', color: Color(0xFF797979), fontWeight: FontWeight.w500),),
+              Text(time, style: TextStyle(fontSize: 14.sp, fontFamily: 'IBMPlexSansKR', color: Color(0xFF797979), fontWeight: FontWeight.w500),),
               SizedBox(height: 30.h,),
-              Text('오늘 다른 사람들의 이야기를 들으며, 나도 혼자가 아니라는 걸 느꼈다. 조금은 마음이 가벼워졌다.', style: TextStyle(fontSize: 14.sp, fontFamily: 'IBMPlexSansKR', color: Color(0xFF000000), fontWeight: FontWeight.w300),),
+              Text(reflection, style: TextStyle(fontSize: 14.sp, fontFamily: 'IBMPlexSansKR', color: Color(0xFF000000), fontWeight: FontWeight.w300),),
             ],
           ),
         ),
