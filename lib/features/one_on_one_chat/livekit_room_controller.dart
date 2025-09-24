@@ -140,6 +140,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'http_livekit_token_repository.dart'; // JoinNotFoundException, CreateRoomReq 등
+import 'package:livekit_client/livekit_client.dart' as lk;
 
 class LiveKitRoomController {
   final LiveKitTokenRepository tokenRepo;
@@ -181,51 +182,157 @@ class LiveKitRoomController {
     return null;
   }
 
-  /// roomId가 없으면 404 → 방 생성 → join 재시도
-  Future<void> connect({
-    required int roomId,
-    required String identity,
-  }) async {
-    // 1) 자격 증명 얻기 (404면 생성 후 재시도)
-    LiveKitCredentials creds;
-    try {
-      creds = await tokenRepo.fetchCredentials(roomId: roomId, identity: identity);
-    } on JoinNotFoundException {
-      // 방이 없으므로 생성
-      // 서버 정책에 맞게 값 조정 (duration, maxCapacity)
-      final created = await tokenRepo.createRoom(
-        const CreateRoomReq(roomName: '1:1 상담방', duration: 'MIN15', maxCapacity: 2),
-      );
-      // 보통 서버는 생성된 roomId를 반환합니다. 원하는 roomId와 다를 수 있으니
-      // 스펙에 맞게 사용하세요. 여기서는 "요청한 roomId로 다시 join" 방식이라
-      // 서버가 동일 roomId로 생성하는지/매핑하는지 확인 필요.
-      // 안전하게는 created.roomId로 join하는 편이 맞습니다.
-      roomId = created.roomId;
+  // /// roomId가 없으면 404 → 방 생성 → join 재시도
+  // Future<void> connect({
+  //   required int roomId,
+  //   required String identity,
+  // }) async {
+  //   // 1) 자격 증명 얻기 (404면 생성 후 재시도)
+  //   LiveKitCredentials creds;
+  //   try {
+  //     creds = await tokenRepo.fetchCredentials(roomId: roomId, identity: identity);
+  //   } on JoinNotFoundException {
+  //     // 방이 없으므로 생성
+  //     // 서버 정책에 맞게 값 조정 (duration, maxCapacity)
+  //     final created = await tokenRepo.createRoom(
+  //       const CreateRoomReq(roomName: '1:1 상담방', duration: 'MIN15', maxCapacity: 2),
+  //     );
+  //     // 보통 서버는 생성된 roomId를 반환합니다. 원하는 roomId와 다를 수 있으니
+  //     // 스펙에 맞게 사용하세요. 여기서는 "요청한 roomId로 다시 join" 방식이라
+  //     // 서버가 동일 roomId로 생성하는지/매핑하는지 확인 필요.
+  //     // 안전하게는 created.roomId로 join하는 편이 맞습니다.
+  //     roomId = created.roomId;
 
-      creds = await tokenRepo.fetchCredentials(roomId: roomId, identity: identity);
-    }
-
-    // 2) LiveKit 연결
-    final room = Room();
-    _room = room;
-
-    _listener = room.createListener()
-      ..on<RoomDisconnectedEvent>((_) => connected.value = false)
-      ..on<ParticipantConnectedEvent>((_) => connected.value = true)
-      ..on<TrackSubscribedEvent>((_) => connected.value = true)
-      ..on<TrackUnsubscribedEvent>((_) => connected.value = true);
-
-    await room.connect(creds.wsUrl, creds.token);
-
-    // 3) 기본 캡처 ON (필요시 UI측에서 제어)
-    await room.localParticipant?.setCameraEnabled(
-      true,
-      cameraCaptureOptions: const CameraCaptureOptions(cameraPosition: CameraPosition.front),
+  //     creds = await tokenRepo.fetchCredentials(roomId: roomId, identity: identity);
+  //   }
+// livekit_room_controller.dart (핵심부만 교체)
+Future<void> connect({
+  required int roomId,
+  required String identity,
+}) async {
+  // 1) 자격증명
+  LiveKitCredentials creds;
+  try {
+    creds = await tokenRepo.fetchCredentials(roomId: roomId, identity: identity);
+  } on JoinNotFoundException {
+    final created = await tokenRepo.createRoom(
+      const CreateRoomReq(roomName: '1:1 상담방', duration: 'MIN15', maxCapacity: 2),
     );
-    await room.localParticipant?.setMicrophoneEnabled(true);
-
-    connected.value = true;
+    roomId = created.roomId; // ← 생성된 roomId로 이어서 진행 (둘 다 같은 roomId 써야 함)
+    creds = await tokenRepo.fetchCredentials(roomId: roomId, identity: identity);
   }
+
+  // 2) 방 객체 & 이벤트 한번만 연결
+  final room = Room();
+  _room = room;
+  _listener?.dispose();
+  _listener = room.createListener()
+    ..on<RoomDisconnectedEvent>((_) => connected.value = false)
+    ..on<ParticipantConnectedEvent>((_) => connected.value = true)
+    ..on<TrackPublishedEvent>((e) async {
+      if (!e.publication.isScreenShare && !e.publication.subscribed) {
+        try { await e.publication.subscribe(); } catch (_) {}
+      }
+    })
+    ..on<TrackSubscribedEvent>((_) => connected.value = true)
+    ..on<TrackUnsubscribedEvent>((_) => connected.value = true);
+
+  // 3) 단 한 번의 connect
+  await room.connect(
+    creds.wsUrl,
+    creds.token,
+    connectOptions: const ConnectOptions(autoSubscribe: true),
+    roomOptions: const RoomOptions(adaptiveStream: true, dynacast: true),
+  );
+
+  // 4) 내 카메라/마이크 ON (딱 한 번)
+  await room.localParticipant?.setCameraEnabled(
+    true,
+    cameraCaptureOptions: const CameraCaptureOptions(
+      cameraPosition: CameraPosition.front,
+    ),
+  );
+  await room.localParticipant?.setMicrophoneEnabled(true);
+
+  connected.value = true;
+}
+
+
+final remoteVideoTrack = ValueNotifier<lk.VideoTrack?>(null);
+
+void _wireRoomEvents(lk.Room room) {
+  _listener = room.createListener()
+    ..on<lk.ParticipantConnectedEvent>((e) async {
+      // 새로 들어온 참가자가 이미 발행한 비디오가 있으면 구독 시도
+      for (final pub in e.participant.videoTrackPublications) {
+        if (!pub.isScreenShare && !pub.subscribed) {
+          try { await pub.subscribe(); } catch (_) {}
+        }
+      }
+    })
+    ..on<lk.TrackPublishedEvent>((e) async {
+      // 일부 버전에선 kind enum이 달라서 타입 체크/구독만 수행
+      if (!e.publication.isScreenShare && !e.publication.subscribed) {
+        try { await e.publication.subscribe(); } catch (_) {}
+      }
+    })
+    ..on<lk.TrackSubscribedEvent>((e) {
+      // ⬅️ 여기! enum 대신 타입으로 체크
+      final t = e.track;
+      if (t is lk.VideoTrack && !e.publication.isScreenShare) {
+        remoteVideoTrack.value = t;
+      }
+    })
+    ..on<lk.TrackUnsubscribedEvent>((e) {
+      if (remoteVideoTrack.value?.sid == e.track.sid) {
+        remoteVideoTrack.value = null;
+      }
+    })
+    ..on<lk.RoomDisconnectedEvent>((_) {
+      remoteVideoTrack.value = null;
+      connected.value = false;
+    });
+}
+
+  //   // 2) LiveKit 연결
+  //   final room = Room();
+  //   _room = room;
+  //   _wireRoomEvents(room);
+
+  //   await room.connect(
+  //     creds.wsUrl,
+  //     creds.token,
+  //     connectOptions: const lk.ConnectOptions(autoSubscribe: true),
+  //     roomOptions: const lk.RoomOptions(adaptiveStream: true, dynacast: true),
+  //   );
+
+  //   // 입장 직후 발행 보장 (양쪽 모두)
+  //   await room.localParticipant?.setCameraEnabled(
+  //     true,
+  //     cameraCaptureOptions: const lk.CameraCaptureOptions(
+  //       cameraPosition: lk.CameraPosition.front,
+  //     ),
+  //   );
+  //   await room.localParticipant?.setMicrophoneEnabled(true);
+
+
+  //   _listener = room.createListener()
+  //     ..on<RoomDisconnectedEvent>((_) => connected.value = false)
+  //     ..on<ParticipantConnectedEvent>((_) => connected.value = true)
+  //     ..on<TrackSubscribedEvent>((_) => connected.value = true)
+  //     ..on<TrackUnsubscribedEvent>((_) => connected.value = true);
+
+  //   await room.connect(creds.wsUrl, creds.token, roomOptions: const RoomOptions(adaptiveStream: true, dynacast: true,), connectOptions: const ConnectOptions(autoSubscribe: true));
+
+  //   // 3) 기본 캡처 ON (필요시 UI측에서 제어)
+  //   await room.localParticipant?.setCameraEnabled(
+  //     true,
+  //     cameraCaptureOptions: const CameraCaptureOptions(cameraPosition: CameraPosition.front),
+  //   );
+  //   await room.localParticipant?.setMicrophoneEnabled(true);
+
+  //   connected.value = true;
+  // }
 
   Future<void> setCameraEnabled(bool enabled, {CameraCaptureOptions? options}) async {
     final lp = _room?.localParticipant;

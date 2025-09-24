@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
@@ -26,8 +27,12 @@ class PreviewWithOverlay extends StatelessWidget {
     this.showOverlay = true,
   });
 
+
   @override
   Widget build(BuildContext context) {
+        if(!showPreview && !showOverlay){
+      return SizedBox(width: w, height: h,);
+    }
     final ctrl = tracker.controller;
     if (ctrl == null) {
       return Container(width: w, height: h, color: Colors.black);
@@ -52,10 +57,11 @@ class PreviewWithOverlay extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
+
               // 카메라 프리뷰
               if (showPreview)
                 FittedBox(
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                   child: SizedBox(
                     width: ph,
                     height: pw,
@@ -72,10 +78,15 @@ class PreviewWithOverlay extends StatelessWidget {
                 LayoutBuilder(
                   builder: (context, c) {
                     final imgSize = Size(
-                      ctrl.value.previewSize?.width ?? w,
                       ctrl.value.previewSize?.height ?? h,
+                      ctrl.value.previewSize?.width ?? w,
                     );
                     final widgetSize = Size(c.maxWidth, c.maxHeight);
+                    final fitted = applyBoxFit(BoxFit.contain, imgSize, widgetSize);
+                    final dest = fitted.destination;
+                    final dx = (widgetSize.width - dest.width);
+                    final dy = (widgetSize.height - dest.height);
+                    final contentRect = Rect.fromLTWH(dx, dy, dest.width, dest.height);
 
                     return ValueListenableBuilder<List<Face>>(
                       valueListenable: tracker.faces,
@@ -91,6 +102,7 @@ class PreviewWithOverlay extends StatelessWidget {
                                     faces: faces,
                                     imageSize: imgSize,
                                     widgetSize: widgetSize,
+                                    contentRect: contentRect,
                                     mirror: true,
                                     sticker: sticker,
                                     mouthState: ms,

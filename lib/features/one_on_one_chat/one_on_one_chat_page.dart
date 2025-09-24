@@ -1314,22 +1314,46 @@ void initState() {
   //     if (mounted) setState(() => _arOn = next);
   //   }
   // }
+// Future<void> _toggleAR() async {
+//   final next = !_arOn;
+//   try {
+//     if (next) {
+//       if (_lkConnected) {
+//         await _lk?.setCameraEnabled(false);
+//       }
+//       await _tracker.startStreamIfNeeded();
+//     } else {
+//       await _tracker.stopStreamIfRunning();
+
+//       if (_lkConnected) {
+//         await _lk?.setCameraEnabled(true,
+//             options: const CameraCaptureOptions(
+//               cameraPosition: CameraPosition.front,
+//               params: VideoParametersPresets.h720_43
+//             ));
+//       } else {
+//         await _tracker.resumePreviewIfPossible();
+//       }
+//     }
+//   } finally {
+//     if (mounted) setState(() => _arOn = next);
+//   }
+// }
 Future<void> _toggleAR() async {
   final next = !_arOn;
   try {
-    if (next) {
-      if (_lkConnected) {
-        await _lk?.setCameraEnabled(false);
-      }
+    if (next) {            // AR 켜기
+      if (_lkConnected) await _lk?.setCameraEnabled(false);
+      await Future.delayed(const Duration(milliseconds: 120));
       await _tracker.startStreamIfNeeded();
-    } else {
+    } else {               // AR 끄기
       await _tracker.stopStreamIfRunning();
-
+      await Future.delayed(const Duration(milliseconds: 120));
       if (_lkConnected) {
-        await _lk?.setCameraEnabled(true,
-            options: const CameraCaptureOptions(
-              cameraPosition: CameraPosition.front,
-            ));
+        await _lk?.setCameraEnabled(
+          true,
+          options: const CameraCaptureOptions(cameraPosition: CameraPosition.front),
+        );
       } else {
         await _tracker.resumePreviewIfPossible();
       }
@@ -1497,7 +1521,7 @@ Future<void> _toggleAR() async {
       child: VideoTrackRenderer(
         track,
         mirrorMode: VideoViewMirrorMode.mirror,
-        fit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+        fit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
       ),
     );
   }
@@ -1509,7 +1533,7 @@ Future<void> _toggleAR() async {
       borderRadius: BorderRadius.circular(10.w),
       child: VideoTrackRenderer(
         track,
-        fit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+        fit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
       ),
     );
   }
@@ -1540,15 +1564,21 @@ Future<void> _toggleAR() async {
                   lkConnected: _lkConnected,
                   contentWidth: 340.w,
                   contentHeight: 220.h,
-                  buildPreviewWithOverlay: ({required showPreview, required showOverlay}) =>
-                      PreviewWithOverlay(
+                  buildPreviewWithOverlay: ({required showPreview, required showOverlay}) {
+                    if(_lkConnected && !_arOn){
+                      return const SizedBox.shrink();
+                    }
+                    return                       
+                    PreviewWithOverlay(
                         tracker: _tracker,
                         sticker: _faceSticker,
                         w: 340.w,
                         h: 220.h,
                         showPreview: showPreview,
                         showOverlay: showOverlay,
-                      ),
+                      );
+
+                  },
                   buildLocal: () => _localVideoBox(),
                   buildRemote: () => _remoteVideoBox(),
                   placeholder: ClipRRect(
