@@ -110,7 +110,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       const Spacer(),
                       TextButton(
                         onPressed: _skip,
-                        child: const Text('건너뛰기'),
+                        child: const Text('건너뛰기', style: TextStyle(color: Color(0xFFFFFFFF)),),
                       ),
                     ],
                   ),
@@ -127,55 +127,63 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 _PageDots(current: _page, total: pages.length),
                 const SizedBox(height: 12),
                 // 하단 네비게이션 (필요 최소만 복구)
+
+                // 하단 네비게이션
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
                   child: Row(
                     children: [
                       if (_page > 0)
                         OutlinedButton(
+                          // (이전 버튼 스타일 동일)
                           style: OutlinedButton.styleFrom(
-                            backgroundColor: Colors.transparent,                // ✅ 흰 배경
-                            foregroundColor: const Color(0xFF9F9F9F),     // ✅ 회색 텍스트/아이콘
-                            side: const BorderSide(color: Colors.transparent), // 옅은 테두리(선택)
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 12,
-                            ),
+                            backgroundColor: Colors.transparent,
+                            foregroundColor: const Color(0xFF9F9F9F),
+                            side: const BorderSide(color: Colors.transparent),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                           ),
                           onPressed: () => _pageCtrl.previousPage(
                             duration: const Duration(milliseconds: 200),
                             curve: Curves.easeOut,
                           ),
-                          child: const Text('이전', style: TextStyle(fontFamily: 'IBMPlexSans')),
+                          child: const Text('이전', style: TextStyle(fontFamily: 'IBMPlexSans', color: Color(0xFFFAFBF1))),
                         )
                       else
                         const SizedBox(width: 80),
                       const Spacer(),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,                // ✅ 흰 배경
-                          foregroundColor: const Color(0xFF9F9F9F),     // ✅ 회색 텍스트/아이콘
-                          elevation: 0,                                  // 평면 느낌 유지(선택)
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 12,
-                          ),
+                          backgroundColor: Colors.transparent,
+                          foregroundColor: const Color(0xFF9F9F9F),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          // 아이콘은 고정 크기라면 패딩을 조금 줄이는 게 보기 좋아요
+                          padding: EdgeInsets.symmetric(horizontal: _page < lastIndex ? 12 : 20, vertical: 12),
                         ),
-                        onPressed: () {
-                          _goNext(lastIndex);
-                        },
-                        child: Text(
-                          _page < lastIndex ? '다음' : '완료',
-                          style: const TextStyle(fontFamily: 'IBMPlexSans'),
-                        ),
+                        onPressed: () => _goNext(lastIndex),
+                        child: _page < lastIndex
+                            ?SizedBox(
+                              width: 44.w,
+                              height: 44.w,
+                              child: OverflowBox(
+                                maxHeight: 105.w,
+                                maxWidth: 105.h,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadiusGeometry.circular(10.w),
+                                  child: Image.asset(
+                                      'assets/images/icons/next.png',
+                                      width: 105.w, // 필요에 맞게 조정 (예: 24.w) // 필요에 맞게 조정 (예: 24.h)
+                                      // semanticLabel: '다음', // 접근성 필요시
+                                    ),
+                                ),
+                              ),
+                            )
+                            : const Text('완료', style: TextStyle(fontFamily: 'IBMPlexSans')),
                       ),
                     ],
                   ),
-                )
+                ),
               ],
             ),
           ),

@@ -1,44 +1,6 @@
-// import 'package:flutter/material.dart';
-// import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-// class RecordPage extends StatelessWidget {
-//   const RecordPage({super.key});
 
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       body: Stack(
-//         children: [
-//           // 배경
-//           Positioned.fill(
-//             child: Image.asset(
-//               'assets/illustrations/widget_background.png',
-//               fit: BoxFit.cover,
-//             ),
-//           ),
-
-//           // 뒤로가기 버튼
-//           Positioned(
-//             left: 23.w,   // ← ScreenUtil은 w/h 반대로 쓰지 않도록 주의!
-//             top: 53.h,
-//             child: GestureDetector(
-//               onTap: () => Navigator.pop(context),
-//               child: SizedBox(
-//                 width: 44.w,
-//                 height: 44.w,
-//                 child: Image.asset(
-//                   'assets/images/icons/back_btn.png',
-//                   fit: BoxFit.contain,
-//                 ),
-//               ),
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
-
+import 'package:blurr/features/record/session_summary_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter/material.dart';
@@ -51,22 +13,28 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 class MiniCalendar extends StatefulWidget {
   const MiniCalendar({
     super.key,
-    this.month,                // 표시할 달(기본: 이번 달)
-    this.initialSelectedDate,  // 초기 선택 날짜
+    this.month,
+    this.initialSelectedDate,
     this.onSelected,
     this.minYear,
     this.maxYear,
+    this.markedDates,             // ✅ 점 표시할 날짜들(연-월-일 정규화된 Set)
+    this.markerColor = const Color(0xFF2BACFF),
   });
 
   final DateTime? month;
   final DateTime? initialSelectedDate;
   final ValueChanged<DateTime>? onSelected;
-  final int? minYear; // 기본: 현재연도-5
-  final int? maxYear; // 기본: 현재연도+5
+  final int? minYear;
+  final int? maxYear;
+
+  final Set<DateTime>? markedDates;  // ✅ 추가
+  final Color markerColor;           // ✅ 추가
 
   @override
   State<MiniCalendar> createState() => _MiniCalendarState();
 }
+
 
 class _MiniCalendarState extends State<MiniCalendar> {
   static const _brandBlue = Color(0xFF2BACFF);
@@ -204,43 +172,64 @@ class _MiniCalendarState extends State<MiniCalendar> {
                       final inMonth = dayNum >= 1 && dayNum <= days;
 
                       if (!inMonth) return const Expanded(child: SizedBox.expand());
+// 날짜 셀 내부 (dayNum 계산 이후)
+final date = DateTime(_month.year, _month.month, dayNum);
+final isSelected = _selected != null &&
+    _selected!.year == date.year &&
+    _selected!.month == date.month &&
+    _selected!.day == date.day;
 
-                      final date = DateTime(_month.year, _month.month, dayNum);
-                      final isSelected = _selected != null &&
-                          _selected!.year == date.year &&
-                          _selected!.month == date.month &&
-                          _selected!.day == date.day;
+// ✅ 표시 대상인지 확인 (연-월-일 정규화)
+DateTime _ymd(DateTime d) => DateTime(d.year, d.month, d.day);
+final hasMarker = (widget.markedDates ?? const {}).contains(_ymd(date));
 
-                      return Expanded(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () {
-                            setState(() => _selected = date);
-                            widget.onSelected?.call(date);
-                          },
-                          child: Center(
-                            child: Container(
-                              width: 28.w,
-                              height: 28.w,
-                              decoration: isSelected
-                                  ? BoxDecoration(
-                                      color: _brandBlue,
-                                      borderRadius: BorderRadius.circular(8.r),
-                                    )
-                                  : null,
-                              alignment: Alignment.center,
-                              child: Text(
-                                '$dayNum',
-                                style: textBase.copyWith(
-                                  fontSize: 14.sp,
-                                  fontWeight: isSelected?FontWeight.w600:FontWeight.w300,
-                                  color: isSelected ? Colors.white : Colors.black,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
+return Expanded(
+  child: GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: () {
+      setState(() => _selected = date);
+      widget.onSelected?.call(date);
+    },
+    child: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 28.w,
+            // height: 28.w,
+            decoration: isSelected
+                ? BoxDecoration(
+                    color: _brandBlue,
+                    borderRadius: BorderRadius.circular(8.r),
+                  )
+                : null,
+            alignment: Alignment.center,
+            child: Text(
+              '$dayNum',
+              style: textBase.copyWith(
+                fontSize: 14.sp,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w300,
+                color: isSelected ? Colors.white : Colors.black,
+              ),
+            ),
+          ),
+          SizedBox(height: 4.h),
+          // ✅ 작은 점
+          if (hasMarker)
+            Container(
+              width: 4.w,
+              height: 4.w,
+              decoration: BoxDecoration(
+                color: widget.markerColor,
+                borderRadius: BorderRadius.circular(2.r),
+              ),
+            ),
+        ],
+      ),
+    ),
+  ),
+);
+
                     }),
                   ),
                 );
@@ -363,6 +352,48 @@ class RecordPage extends StatefulWidget {
 
 class _RecordPageState extends State<RecordPage> {
   int _currentTab = 0; // 0: 그룹 상담, 1: 내담록
+  DateTime? _selectedDate;
+  DateTime _ymdKey(DateTime d)=> DateTime(d.year, d.month, d.day);
+  String _formatDate(DateTime d) => '${d.year.toString().padLeft(4, '0')}. ${d.month.toString().padLeft(2, '0')}. ${d.day.toString().padLeft(2, '0')}.';
+  static const _teacher = '김포숑';
+  static const _defaultDur = '58분 21초';
+
+  // ✅ 여러 목업 데이터 (원하는 만큼 추가)
+  final Map<DateTime, Map<String, String>> _summaries = {
+    // 같은 달/다른 달 섞어서 예시
+    DateTime(2025, 9, 22): {
+      'summary': '오늘 다른 사람들의 이야기를 들으며, 나도 혼자가 아니라는 걸 느꼈다. 조금은 마음이 가벼워졌다.',
+      'duration': '58분 21초',
+      'teacher': '김포숑',
+    },
+    DateTime(2025, 9, 20): {
+      'summary': '불확실한 미래가 떠올라 답답했지만, 비슷한 고민을 듣고 위로가 되었다.',
+      'duration': '42분 10초',
+      'teacher': '김포숑',
+    },
+    DateTime(2025, 9, 16): {
+      'summary': '내 얘기를 조심스레 꺼냈는데, 고개를 끄덕여주는 사람들이 있어 혼자 같지 않았다.',
+      'duration': '35분 55초',
+      'teacher': '김포숑',
+    },
+    DateTime(2025, 9, 12): {
+      'summary': '각자의 방식으로 이별을 견디는 법을 배우며, 말하지 못했던 감정을 처음으로 꺼냈다.',
+      'duration': '50분 02초',
+      'teacher': '김포숑',
+    },
+    DateTime(2025, 8, 31): {
+      'summary': '부끄러움이 떠올랐지만, 대화 속에서 다시 새 출발할 용기를 얻었다.',
+      'duration': '47분 18초',
+      'teacher': '김포숑',
+    },
+    DateTime(2025, 8, 27): {
+      'summary': '“나도 그래”라는 말 한마디에 울컥했다. 연결감이 긴 하루를 버티게 했다.',
+      'duration': '39분 44초',
+      'teacher': '김포숑',
+    },
+  };
+    Set<DateTime> get _marked => _summaries.keys.map(_ymdKey).toSet();
+
 
   Widget _toggleButton({
     required String label,
@@ -413,14 +444,21 @@ class _RecordPageState extends State<RecordPage> {
 
             ],
           
-        ):Column(
+        ):
+        
+        Column(
           children: [
             //calendar
             Container(
               width: 312.w,
               height: 294.h,
               child: MiniCalendar(
-                month: DateTime(2025, 4, 1),               // 특정 달을 보려면 지정
+                month: DateTime(2025, 9, 1),     
+                markedDates: _marked,
+                onSelected: (d){
+                  final key = _ymdKey(d);
+                  setState(() => _selectedDate = key);
+                },          // 특정 달을 보려면 지정
                 // initialSelectedDate: DateTime(2025, 4, 13), // 초기 선택
               ),
             ),
@@ -637,6 +675,21 @@ class _RecordPageState extends State<RecordPage> {
               ),
             ),
           ),
+      // ✅ 선택된 날짜가 있고, 해당 날짜의 데이터가 있을 때만 표시
+      if (_selectedDate != null && _summaries.containsKey(_selectedDate!))
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: SessionSummaryCard(
+            dateLabel: _formatDate(_selectedDate!),
+            teacherName: _summaries[_selectedDate!]!['teacher'] ?? _teacher,
+            durationLabel: _summaries[_selectedDate!]!['duration'] ?? _defaultDur,
+            summary: _summaries[_selectedDate!]!['summary'] ?? '',
+            onClose: () => setState(() => _selectedDate = null), // X 누르면 숨기기
+          ),
+        ),
+            
 
           // 뒤로가기 버튼
           Positioned(
