@@ -1,3 +1,4 @@
+import 'package:blurr/api/member_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../home/home_page.dart';
@@ -43,21 +44,44 @@ class _OnboardingPageState extends State<OnboardingPage> {
   void _skip() {
     _finish();
   }
+Future<void> _finish() async {
+  final nickname = _nickCtrl.text.trim().isEmpty ? '익명' : _nickCtrl.text.trim();
+  final gender = _gender ?? '밝히고 싶지 않음';
+  final age = _age ?? '20대';
 
-  void _finish() {
-    final data = {
-      'gender': _gender,
-      'region': _region,
-      'agree': _agree,
-      'age': _age,
-      'story': _story,
-    };
-    // TODO: 필요 시 data 저장 로직 추가
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const Center(child: CircularProgressIndicator()),
+  );
+
+  try {
+    // ✅ X-Client-Id 준비(캐시/생성)
+    await MemberApi.I.prepare();
+
+    final registered = await MemberApi.I.isRegistered();
+    if (!registered) {
+      await MemberApi.I.register(
+        genderKo: gender,
+        ageKo: age,
+        nickname: nickname,
+      );
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pop(); // 로딩 닫기
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const MainContentPage()),
     );
+  } catch (e) {
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('회원 처리 중 오류가 발생했어요: $e')),
+    );
   }
+}
 
   @override
   Widget build(BuildContext context) {
