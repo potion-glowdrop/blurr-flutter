@@ -152,6 +152,7 @@ class LiveKitRoomController {
   EventsListener<RoomEvent>? _listener;
 
   Room? get room => _room;
+  final remoteVideoTrack = ValueNotifier<VideoTrack?>(null);
 
   Future<void> dispose() async {
     _listener?.dispose();
@@ -226,16 +227,31 @@ Future<void> connect({
   final room = Room();
   _room = room;
   _listener?.dispose();
-  _listener = room.createListener()
-    ..on<RoomDisconnectedEvent>((_) => connected.value = false)
-    ..on<ParticipantConnectedEvent>((_) => connected.value = true)
-    ..on<TrackPublishedEvent>((e) async {
-      if (!e.publication.isScreenShare && !e.publication.subscribed) {
-        try { await e.publication.subscribe(); } catch (_) {}
+_listener = room.createListener()
+  ..on<ParticipantConnectedEvent>((e) async {
+    for (final pub in e.participant.videoTrackPublications) {
+      if (!pub.isScreenShare && !pub.subscribed) {
+        try { await pub.subscribe(); } catch (_) {}
       }
-    })
-    ..on<TrackSubscribedEvent>((_) => connected.value = true)
-    ..on<TrackUnsubscribedEvent>((_) => connected.value = true);
+    }
+  })
+  ..on<TrackPublishedEvent>((e) async {
+    if (!e.publication.isScreenShare && !e.publication.subscribed) {
+      try { await e.publication.subscribe(); } catch (_) {}
+    }
+  })
+  ..on<TrackSubscribedEvent>((e) {
+    connected.value = true;
+    if (e.track is VideoTrack && !e.publication.isScreenShare) {
+      remoteVideoTrack.value = e.track as VideoTrack;
+    }
+  })
+  ..on<TrackUnsubscribedEvent>((e) {
+    if (remoteVideoTrack.value?.sid == e.track.sid) {
+      remoteVideoTrack.value = null;
+    }
+  })
+  ..on<RoomDisconnectedEvent>((_) => connected.value = false);
 
   // 3) 단 한 번의 connect
   await room.connect(
@@ -258,7 +274,7 @@ Future<void> connect({
 }
 
 
-final remoteVideoTrack = ValueNotifier<lk.VideoTrack?>(null);
+// final remoteVideoTrack = ValueNotifier<lk.VideoTrack?>(null);
 
 void _wireRoomEvents(lk.Room room) {
   _listener = room.createListener()
