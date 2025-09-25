@@ -7,6 +7,7 @@ import 'package:blurr/features/group_chat/group_room_done.dart';
 import 'package:blurr/features/group_chat/mouth_state.dart';
 import 'package:blurr/features/group_chat/participant_avatar.dart';
 import 'package:blurr/features/group_chat/participant_row.dart';
+import 'package:blurr/features/group_chat/session_flow_controller.dart';
 import 'package:blurr/features/group_chat/session_info_card.dart';
 import 'package:blurr/livekit/audio_room_controller.dart';
 import 'package:blurr/net/group_api_client.dart';
@@ -39,6 +40,12 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
   // id <-> name
   final Map<String, String> _id2name = {};
   final Map<String, String> _name2id = {};
+// GroupRoomPageState 내부
+late SessionFlowController _flow;
+
+// participants는 UI 표시에 쓰는 "보이는 이름" 배열
+final List<String> _displayNames = const ['이슬', '나비', '바람', '새싹', '파도'];
+
 
   // 피어별 실시간 표정 notifier
   final Map<String, ValueNotifier<FaceExpression>> _peerNoti = {};
@@ -233,7 +240,7 @@ Widget _renderPeerAvatar(String name, {
     return _peerExpr[id];
   }
   // === 단순 상태 ===
-  String turn = "새싹";
+  String turn = "";
   String myName = "";
   String? _myBadge = '';
   final List<String> _emojis = const ['☀️','☁️','☔️','⚡️','🌪️','🌈','❄️'];
@@ -301,6 +308,20 @@ Widget _renderPeerAvatar(String name, {
 void initState() {
   super.initState();
 
+  _flow = SessionFlowController(
+    participants: _displayNames,
+    plan: const SessionPlan(
+      prompts: [
+        '최근 가장 힘들었던 순간은 언제였나요?',
+        '지금 나에게 가장 필요한 도움이 있다면?',
+        '한 주를 버티게 한 작은 감사 한 가지는?'
+      ],
+      openingSec: 15,
+      promptSec: 15,
+      answerSec: 40,
+      closingSec: 15,
+    ),
+  );
   _audio.onData = ({
     required String fromIdentity,
     required Map<String, dynamic> payload,
@@ -440,6 +461,7 @@ void initState() {
     _hydrateMappingsFromRoom(); // ⭐ 바로 스냅샷으로 매핑 선점
     _startWhoHeartbeat();       // ⭐ 몇 초간 WHO 재공지
     _announceMe();              // 기존 1회 공지 그대로 유지
+    _flow.start();
 
 
     } catch (e) {
@@ -571,15 +593,39 @@ String? _extractNameFromJwt(String jwt) {
             child: Center(
               child: Column(
                 children: [
-                  SessionInfoCard(
-                    text:
-                        '이번 세션의 당신의 닉네임은 ${myName.isEmpty?"...":myName}입니다. 그룹 대화 방에서는 음성과 표정으로 소통할 수 있습니다.',
+                  // SessionInfoCard(
+                  // (상단 카드 위치)
+                  ValueListenableBuilder<String>(
+                    valueListenable: _flow.infoText, // <-- 오케스트레이터의 상태 문구
+                    builder: (_, txt, __) {
+                      final nick = (myName.isEmpty ? '...' : myName);
+                      return SessionInfoCard(
+                        text: '이번 세션의 당신의 닉네임은 $nick 입니다. ${txt.isEmpty ? "" : txt}',
+                      );
+                    },
                   ),
+
+                  // SessionInfoCard(
+                  //   text:
+                  //       '이번 세션의 당신의 닉네임은 ${myName.isEmpty?"...":myName}입니다. 그룹 대화 방에서는 음성과 표정으로 소통할 수 있습니다.',
+                  // ),
                   SizedBox(height: 11.h),
-                  ParticipantsRow(
-                    participants: const ['이슬', '나비', '바람', '새싹', '파도'],
-                    activeName: turn,
+                  ValueListenableBuilder<String>(
+                    valueListenable: _flow.activeName,
+                    builder: (_, active, __) {
+                      // _flow.activeName과 화면의 turn 문자열을 일치시켜 아바타도 하이라이트를 맞추고 싶다면:
+                      turn = active; // 필요 시 상태 변수에 동기화
+                      return ParticipantsRow(
+                        participants: _displayNames,
+                        activeName: active,
+                      );
+                    },
                   ),
+
+                  // ParticipantsRow(
+                  //   participants: const ['이슬', '나비', '바람', '새싹', '파도'],
+                  //   activeName: turn,
+                  // ),
                 ],
               ),
             ),
@@ -635,12 +681,23 @@ String? _extractNameFromJwt(String jwt) {
                                   width: 198.w,
                                   height: 198.w,
                                 ),
-                                Positioned(
-                                  top: 0,
-                                  bottom: 0,
-                                  left: 0,
-                                  right: 0,
-                                  child: Center(child: Text('15', style: TextStyle(fontFamily: 'IBMPlexSansKR', fontSize: 40.sp, fontWeight: FontWeight.w200, color: Color(0xFF17A1FA)), )))
+                                      // center piece 내부 Text('15', ...) 교체
+                                      ValueListenableBuilder<int>(
+                                        valueListenable: _flow.secondsLeft,
+                                        builder: (_, sec, __) {
+                                          return Center(
+                                            child: Text(
+                                              '$sec',
+                                              style: TextStyle(
+                                                fontFamily: 'IBMPlexSansKR',
+                                                fontSize: 40.sp,
+                                                fontWeight: FontWeight.w200,
+                                                color: const Color(0xFF17A1FA),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
                               ],
                             ),
                           ),

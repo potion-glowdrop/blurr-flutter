@@ -107,7 +107,7 @@ class AudioRoomController {
 
   Future<void> connect({required String wsUrl, required String token}) async {
     await disconnect();
-    debugPrint('[AUDIO] connect() -> $wsUrl');
+    // debugPrint('[AUDIO] connect() -> $wsUrl');
     final room = lk.Room();
     await room.connect(wsUrl, token);
     await room.localParticipant?.setMicrophoneEnabled(true);
@@ -115,14 +115,14 @@ class AudioRoomController {
 
     // ✅ 현재 참가자 로그
     final lp = room.localParticipant;
-    debugPrint('[AUDIO] connected. me=${lp?.identity} name=${lp?.name} meta=${lp?.metadata}');
-    debugPrint('[AUDIO] remote count=${room.remoteParticipants.length}');
+    // debugPrint('[AUDIO] connected. me=${lp?.identity} name=${lp?.name} meta=${lp?.metadata}');
+    // debugPrint('[AUDIO] remote count=${room.remoteParticipants.length}');
 
     _startEventListener();
   }
 
   Future<void> disconnect() async {
-    debugPrint('[AUDIO] disconnect()');
+    // debugPrint('[AUDIO] disconnect()');
     _cancelListen?.call();
     _cancelListen = null;
     await _listener?.dispose();
@@ -142,12 +142,12 @@ class AudioRoomController {
     final r = _room;
     final lp = r?.localParticipant;
     if (r == null || lp == null) {
-      debugPrint('[AUDIO] publishJson skipped (room/local null)');
+      // debugPrint('[AUDIO] publishJson skipped (room/local null)');
       return;
     }
 
     // ✅ 송신 로그
-    debugPrint('[AUDIO→] topic=$topic reliable=$reliable to=${toIdentities?.join(",") ?? "-"} payload=$m');
+    // debugPrint('[AUDIO→] topic=$topic reliable=$reliable to=${toIdentities?.join(",") ?? "-"} payload=$m');
 
     final bytes = utf8.encode(json.encode(m));
     await lp.publishData(
