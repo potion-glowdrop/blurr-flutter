@@ -67,4 +67,34 @@ class GroupApiClient {
     if (hit.isNotEmpty) return (hit['id'] as num).toInt();
     return await addRoom(roomName: roomName);
   }
+
+  // lib/net/group_api_client.dart 에 헬퍼 추가
+  Future<Map<String, dynamic>> tryJoin(int roomId) async {
+    final r = await _dio.post('/rooms/$roomId/join',
+        options: Options(validateStatus: (_) => true));
+    if (r.statusCode == 200) {
+      return {
+        'ok': true,
+        'data': r.data['data'],
+      };
+    }
+    return {
+      'ok': false,
+      'status': r.statusCode,
+      'code': r.data?['code'],
+      'message': r.data?['message'],
+    };
+  }
+
+Future<Map<String, dynamic>> addRoomFull(String roomName,
+    {String duration = 'MIN15', int maxCap = 8}) async {
+  final r = await _dio.post('/rooms/add',
+      data: {'roomName': roomName, 'duration': duration, 'maxCapacity': maxCap},
+      options: Options(validateStatus: (_) => true));
+  if (r.statusCode == 200) {
+    return {'ok': true, 'roomId': (r.data['data']['roomId'] as num).toInt()};
+  }
+  return {'ok': false, 'status': r.statusCode, 'code': r.data?['code'], 'message': r.data?['message']};
+}
+
 }

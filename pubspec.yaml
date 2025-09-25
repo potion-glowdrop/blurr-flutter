@@ -45,6 +45,7 @@ dependencies:
   shared_preferences: ^2.5.3
   uuid: ^4.5.1
   dio: ^5.9.0
+  flutter_native_splash: ^2.4.6
 
 dev_dependencies:
   flutter_test:
@@ -82,6 +83,8 @@ flutter:
     - assets/images/mypage/
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
+  
+
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -122,7 +125,12 @@ flutter:
           - asset: assets/fonts/IBMPlexSansKR-Bold.ttf
             weight: 700
 
-
+flutter_native_splash:
+    # 사진이 화면을 '배경'으로 가득 채움
+    background_image: assets/illustrations/splash_screen.png
+    # 중앙 로고가 필요 없으면 image는 아예 생략
+    # image: assets/splash/transparent_1x1.png  # 필요 시 아주 작은 투명 PNG
+    fullscreen: true
 
   #
   # For details regarding fonts from package dependencies,
