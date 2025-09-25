@@ -53,7 +53,13 @@ class ParticipantAvatar extends StatelessWidget {
     final bool isTurn = (turn == name);
     final double avatarSize = isTurn ? sizeTurn.w : size.w;
     final bool hasBadge = (badge?.trim().isNotEmpty ?? false);
+    final bool hasOverrides = mouthStateOverride != null
+      || mouthOpenRatioOverride != null
+      || leftEyeOpenOverride != null
+      || rightEyeOpenOverride != null;
 
+    // 내 것은 토글에 따르고, 타인은 오버라이드가 오면 그린다
+    final bool showPainter = isSelf ? arOn : hasOverrides;
     MouthState mouth = (isSelf && isTurn) ? MouthState.talking : MouthState.neutral;
     double ratio = (mouth == MouthState.talking) ? 0.22 : 0.02;
     bool leftOpen = true;
@@ -92,7 +98,9 @@ class ParticipantAvatar extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (isSelf && arOn)
+
+
+                    if (showPainter)
                       Positioned.fill(
                         child: IgnorePointer(
                           child: CustomPaint(
@@ -105,7 +113,8 @@ class ParticipantAvatar extends StatelessWidget {
                           ),
                         ),
                       ),
-                    if (hasBadge)
+
+                     if (hasBadge)
                       Positioned(
                         right: -8.w,
                         top: -3.h,

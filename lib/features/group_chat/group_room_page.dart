@@ -1,8 +1,10 @@
 // lib/features/group_chat/group_room_page.dart
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:blurr/features/group_chat/control_bar.dart';
 import 'package:blurr/features/group_chat/group_room_done.dart';
+import 'package:blurr/features/group_chat/mouth_state.dart';
 import 'package:blurr/features/group_chat/participant_avatar.dart';
 import 'package:blurr/features/group_chat/participant_row.dart';
 import 'package:blurr/features/group_chat/session_info_card.dart';
@@ -10,8 +12,12 @@ import 'package:blurr/livekit/audio_room_controller.dart';
 import 'package:blurr/net/group_api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'dart:convert';
+import 'package:livekit_client/livekit_client.dart'; // 상단 import 필요
 
 import 'face_tracker_service.dart'; // ⭐ 새 서비스 import
+
+enum Reliability { reliable, fast } // fast = 비신뢰형(빠른 전송)
 
 class GroupRoomPage extends StatefulWidget {
   final String topic;
@@ -30,6 +36,202 @@ class GroupRoomPage extends StatefulWidget {
 }
 
 class _GroupRoomPageState extends State<GroupRoomPage> {
+  // id <-> name
+  final Map<String, String> _id2name = {};
+  final Map<String, String> _name2id = {};
+
+  // 피어별 실시간 표정 notifier
+  final Map<String, ValueNotifier<FaceExpression>> _peerNoti = {};
+  ValueNotifier<FaceExpression> _notiForPeer(String id) =>
+    _peerNoti[id] ??= ValueNotifier<FaceExpression>(FaceExpression.neutral);
+  Timer? _whoHeartbeat;
+void _startWhoHeartbeat() {
+  // 3초 동안 500ms 간격으로 6회 재공지 (패킷 도착 순서 경쟁 대비)
+  _whoHeartbeat?.cancel();
+  int count = 0;
+  _whoHeartbeat = Timer.periodic(const Duration(milliseconds: 500), (t) {
+    if (count++ >= 6) { t.cancel(); return; }
+    _announceMe();
+  });
+}
+void _hydrateMappingsFromRoom() {
+  final room = _audio.room;
+  if (room == null) return;
+
+  // 1) 전체 참가자 배열 만들기
+  final all = <Participant>[];
+
+  // local 먼저
+  final lp = room.localParticipant;
+  if (lp != null) all.add(lp);
+
+  // 2) 원격 참가자: 최신 SDK는 remoteParticipants 사용
+  //    (예전 버전은 participants 였음)
+  all.addAll(room.remoteParticipants.values); // ✅ 이 줄로 교체
+
+  for (final p in all) {
+    final id = p.identity;
+    String? nameFromMeta;
+    try {
+      if (p.metadata != null && p.metadata!.isNotEmpty) {
+        final md = json.decode(p.metadata!) as Map<String, dynamic>;
+        nameFromMeta = (md['randomName'] as String?) ?? (md['name'] as String?);
+      }
+    } catch (_) {}
+    final name = nameFromMeta ?? p.name;
+    if (name != null && name.isNotEmpty) {
+      _id2name[id] = name;
+      _name2id[name] = id;
+    }
+  }
+  if (mounted) setState(() {});
+}
+
+
+  // 내 identity (루프백 필터용)
+  String? _selfIdentity;
+    final Map<String, FaceExpression> _peerExpr = {};
+  // State 안에: 좌표/에셋을 이름으로 매핑 (기존 값 그대로)
+  ({double? top,double? left,double? right,double? bottom,String image,String turnImage}) _avatarPos(String name){
+    switch(name){
+      case '새싹': return (top: (turn=='새싹'?255.w:275.w), left:0, right:0, bottom:null,
+        image:'assets/images/group/saessak.png', turnImage:'assets/images/group/saessak_turn.png');
+      case '파도': return (top: (turn=='파도'?354.w:374.w), left:250.w, right:0, bottom:null,
+        image:'assets/images/group/pado.png', turnImage:'assets/images/group/pado_turn.png');
+      case '나비': return (top: (turn=='나비'?354.w:374.w), left:0, right:250.w, bottom:null,
+        image:'assets/images/group/nabi.png', turnImage:'assets/images/group/nabi_turn.png');
+      case '이슬': return (top: (turn=='이슬'?495.w:510.w), left:140.w, right:0, bottom:null,
+        image:'assets/images/group/iseul.png', turnImage:'assets/images/group/iseul_turn.png');
+      case '바람': return (top: (turn=='바람'?485.w:500.w), left:0, right:150.w, bottom:null,
+        image:'assets/images/group/baram.png', turnImage:'assets/images/group/baram_turn.png');
+      default:     return (top:null,left:null,right:null,bottom:null,
+        image:'assets/images/group/nabi.png', turnImage:'assets/images/group/nabi_turn.png');
+    }
+  }
+// 3) 그리기: 타인도 Builder로
+// Widget _renderAvatar(String name){
+//   final isSelf = (name == myName);
+//   final pos = _avatarPos(name);
+
+//   if (isSelf) {
+//     return ValueListenableBuilder(
+//       valueListenable: _tracker.expression,
+//       builder: (_, exp, __) => ParticipantAvatar(
+//         name: name, image: pos.image, turnImage: pos.turnImage, turn: turn,
+//         top: pos.top, left: pos.left, right: pos.right, bottom: pos.bottom,
+//         arOn: _tracker.arOn, isSelf: true,
+//         mouthStateOverride: exp.mouth,
+//         mouthOpenRatioOverride: exp.mouthOpenRatio,
+//         leftEyeOpenOverride: exp.leftEyeOpen,
+//         rightEyeOpenOverride: exp.rightEyeOpen,
+//       ),
+//     );
+//   } else {
+//     final id = _name2id[name];
+//     if (id == null) {
+//       // 아직 WHO 안 온 경우: 정적 표시
+//       return ParticipantAvatar(
+//         name: name, image: pos.image, turnImage: pos.turnImage, turn: turn,
+//         top: pos.top, left: pos.left, right: pos.right, bottom: pos.bottom,
+//       );
+//     }
+//     return ValueListenableBuilder<FaceExpression>(
+//       valueListenable: _notiForPeer(id),
+//       builder: (_, exp, __) => ParticipantAvatar(
+//         name: name, image: pos.image, turnImage: pos.turnImage, turn: turn,
+//         top: pos.top, left: pos.left, right: pos.right, bottom: pos.bottom,
+//         isSelf: false, arOn: false, // 타인은 토글 무시
+//         mouthStateOverride: exp.mouth,
+//         mouthOpenRatioOverride: exp.mouthOpenRatio,
+//         leftEyeOpenOverride: exp.leftEyeOpen,
+//         rightEyeOpenOverride: exp.rightEyeOpen,
+//       ),
+//     );
+//   }
+// }
+Widget _renderAvatar(String name){
+  final isSelf = (name == myName);
+  final pos = _avatarPos(name);
+
+  if (isSelf) {
+    return ValueListenableBuilder(
+      valueListenable: _tracker.expression,
+      builder: (_, exp, __) => ParticipantAvatar(
+        name: name, image: pos.image, turnImage: pos.turnImage, turn: turn,
+        top: pos.top, left: pos.left, right: pos.right, bottom: pos.bottom,
+        arOn: _tracker.arOn, isSelf: true,
+        // ✅ 내 뱃지 넘기기
+        badge: _myBadge,
+        mouthStateOverride: exp.mouth,
+        mouthOpenRatioOverride: exp.mouthOpenRatio,
+        leftEyeOpenOverride: exp.leftEyeOpen,
+        rightEyeOpenOverride: exp.rightEyeOpen,
+      ),
+    );
+  } else {
+    final id = _name2id[name];
+    final peerBadge = (id != null) ? _peerBadgeById[id] : null;
+
+    if (id == null) {
+      return ParticipantAvatar(
+        name: name, image: pos.image, turnImage: pos.turnImage, turn: turn,
+        top: pos.top, left: pos.left, right: pos.right, bottom: pos.bottom,
+        // ✅ WHO 이전에도 혹시 표시할 게 있으면(보통 없음) 넘길 수 있음
+        badge: peerBadge,
+      );
+    }
+    return ValueListenableBuilder<FaceExpression>(
+      valueListenable: _notiForPeer(id),
+      builder: (_, exp, __) => ParticipantAvatar(
+        name: name, image: pos.image, turnImage: pos.turnImage, turn: turn,
+        top: pos.top, left: pos.left, right: pos.right, bottom: pos.bottom,
+        isSelf: false, arOn: false,
+        // ✅ 타인 뱃지 표시
+        badge: _peerBadgeById[id],
+        mouthStateOverride: exp.mouth,
+        mouthOpenRatioOverride: exp.mouthOpenRatio,
+        leftEyeOpenOverride: exp.leftEyeOpen,
+        rightEyeOpenOverride: exp.rightEyeOpen,
+      ),
+    );
+  }
+}
+
+Widget _renderPeerAvatar(String name, {
+  required String image, required String turnImage,
+  double? top, double? left, double? right, double? bottom,
+}) {
+  final id = _name2id[name];
+  if (id == null) {
+    // WHO 미수신 시 정적 표시
+    return ParticipantAvatar(
+      name: name, image: image, turnImage: turnImage, turn: turn,
+      top: top, left: left, right: right, bottom: bottom,
+    );
+  }
+  return ValueListenableBuilder<FaceExpression>(
+    valueListenable: _notiForPeer(id),
+    builder: (_, exp, __) => ParticipantAvatar(
+      name: name, image: image, turnImage: turnImage, turn: turn,
+      top: top, left: left, right: right, bottom: bottom,
+      isSelf: false, arOn: false, // 타인은 내 토글과 무관
+      mouthStateOverride: exp.mouth,
+      mouthOpenRatioOverride: exp.mouthOpenRatio,
+      leftEyeOpenOverride: exp.leftEyeOpen,
+      rightEyeOpenOverride: exp.rightEyeOpen,
+    ),
+  );
+}
+  // 클래스 필드에 추가
+  final Map<String, String?> _peerBadgeById = {}; // id -> badge(이모지)
+
+  // 수신한 피어 표정 찾기 (id↔name 매핑은 onData(who)에서 채움)
+  FaceExpression? _exprForName(String name){
+    if(name==myName) return _tracker.expression.value; // 내 표정은 로컬 실시간
+    final id = _name2id[name];
+    if(id==null) return null;
+    return _peerExpr[id];
+  }
   // === 단순 상태 ===
   String turn = "새싹";
   String myName = "";
@@ -46,16 +248,127 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
   final _audio = AudioRoomController();
   bool _connecting = true;
   static const String kRoomName = 'kim-sangdam';
+  DateTime _lastExprSent = DateTime.fromMillisecondsSinceEpoch(0);
+
+  void _wireExpressionBroadcast() {
+    _tracker.expression.addListener(() {
+      final now = DateTime.now();
+      if (now.difference(_lastExprSent).inMilliseconds < 80) return; // ~12.5fps
+      _lastExprSent = now;
+
+      final e = _tracker.expression.value;
+      _sendJson({
+        't': 'expr',
+        'm': e.mouth.index,
+        'r': e.mouthOpenRatio,
+        'l': e.leftEyeOpen,
+        'rr': e.rightEyeOpen,
+      }, reliability: Reliability.fast); // 비신뢰형(저지연) 채널
+    });
+  }
 
   // === AR 서비스 ===
   final FaceTrackerService _tracker = FaceTrackerService();
+  Widget _buildAvatar({
+    required String name,
+    required String image,
+    required String turnImage,
+    double? top, double? left, double? right, double? bottom,
+  }) {
+    final isTurn = (turn == name);
+    final isSelf = (name == myName);
+    final expr = _exprForName(name);
 
-  @override
-  void initState() {
-    super.initState();
-    _initAr();
-    _connect();
+    return ParticipantAvatar(
+      name: name,
+      image: image,
+      turnImage: turnImage,
+      turn: turn,
+      top: top,
+      left: left,
+      right: right,
+      bottom: bottom,
+      badge: name == myName ? _myBadge : null,
+      arOn: _tracker.arOn && isSelf,
+      isSelf: isSelf,
+      mouthStateOverride: expr?.mouth,
+      mouthOpenRatioOverride: expr?.mouthOpenRatio,
+      leftEyeOpenOverride: expr?.leftEyeOpen,
+      rightEyeOpenOverride: expr?.rightEyeOpen,
+    );
   }
+@override
+void initState() {
+  super.initState();
+
+  _audio.onData = ({
+    required String fromIdentity,
+    required Map<String, dynamic> payload,
+    String? topic,
+    bool reliable = true,
+  }) {
+    final type = payload['t'];
+    switch (type) {
+    case 'who': {
+      final name = payload['name'] as String?;
+      if (name != null && name.isNotEmpty) {
+        _id2name[fromIdentity] = name;
+        _name2id[name] = fromIdentity;
+
+        // ✅ 매핑 변경 → 빌드 트리에서 해당 이름 아바타를
+        //    정적 → ValueListenableBuilder 로 전환시키려면 반드시 리빌드 필요
+        if (mounted) setState(() {});
+      }
+      break;
+    }
+    case 'badge': {
+      final b = payload['value'] as String?;
+      _peerBadgeById[fromIdentity] = (b != null && b.trim().isNotEmpty) ? b : null;
+      if (mounted) setState(() {}); // 드물게 바뀌니 setState로 충분
+      break;
+    }
+
+      case 'ar': {
+        // 필요 시 상태 반영
+        break;
+      }
+
+      case 'expr': {
+        // 내가 보낸 패킷 루프백이면 무시
+        if (_selfIdentity != null && fromIdentity == _selfIdentity) break;
+
+        // 안전 파싱
+        final mi = (payload['m'] as num?)?.toInt() ?? 0;
+        final ri = (payload['r'] as num?)?.toDouble() ?? 0.0;
+        final l  = payload['l'] == true;
+        final rr = payload['rr'] == true;
+
+        final mouth = (mi >= 0 && mi < MouthState.values.length)
+            ? MouthState.values[mi] : MouthState.neutral;
+        final ratio = ri.isFinite ? ri.clamp(0.0, 0.5) : 0.0;
+
+        // ✅ setState() 대신, 해당 피어 notifier에 값만 넣음
+        _notiForPeer(fromIdentity).value = FaceExpression(
+          mouth: mouth,
+          mouthOpenRatio: ratio,
+          leftEyeOpen: l,
+          rightEyeOpen: rr,
+        );
+        break;
+      }
+
+      default:
+        debugPrint('[DATA] unknown payload: $payload');
+    }
+  };
+
+  _initAr();
+  _wireExpressionBroadcast(); // 내 표정 주기 송출(60~100ms)
+
+  _connect();  // 아래 3 참고: 여기서 _selfIdentity 채우기
+}
+
+
   Future<void> _connect() async {
   setState(() => _connecting = true);
   try {
@@ -122,9 +435,12 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
 
     // 그리고 나서 LiveKit 연결
     await _audio.connect(wsUrl: wsUrl, token: token);
+    _selfIdentity = _audio.room?.localParticipant?.identity;
 
-        // 선택: 입장 직후 내 닉네임 브로드캐스트 (타인 표시명 동기화용)
-        _announceMe();
+    _hydrateMappingsFromRoom(); // ⭐ 바로 스냅샷으로 매핑 선점
+    _startWhoHeartbeat();       // ⭐ 몇 초간 WHO 재공지
+    _announceMe();              // 기존 1회 공지 그대로 유지
+
 
     } catch (e) {
       if (!mounted) return;
@@ -134,6 +450,21 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
       if (mounted) setState(() => _connecting = false);
     }
   }
+
+  Future<void> _sendJson(
+    Map<String, dynamic> m, {
+    String topic = 'grp',
+    Reliability reliability = Reliability.reliable,
+  }) async {
+    // AudioRoomController가 이미 room/마이크 상태 체크함
+    final isReliable = (reliability == Reliability.reliable);
+    await _audio.publishJson(
+      m,
+      topic: topic,
+      reliable: isReliable,
+    );
+  }
+
 
 // GroupRoomPageState
 bool _leaving = false;
@@ -180,9 +511,10 @@ String? _extractNameFromJwt(String jwt) {
 
 
 
-void _announceMe() {
-  // 데이터채널로 {t:'who', name:'...'} 한번 보내는 로직을 여기에 (앞서 안내했던 방식)
-}
+  void _announceMe() {
+    if(myName.isEmpty) return;
+    _sendJson({'t':'who','name':myName},reliability:Reliability.reliable);
+  }
 
 
 
@@ -195,6 +527,9 @@ void _announceMe() {
 
   @override
   void dispose() {
+    for(final n in _peerNoti.values){n.dispose();}
+    _peerNoti.clear();
+    _audio.onData = null;
     _tracker.stop();
     _tracker.dispose();
     _audio.disconnect();
@@ -204,10 +539,16 @@ void _announceMe() {
   Future<void> _toggleAr() async {
     await _tracker.toggle();
     setState(() {});
+    _sendJson({'t':'ar','on':_tracker.arOn}, reliability:Reliability.reliable);
   }
 
   @override
   Widget build(BuildContext context) {
+    final exprSaessak = _exprForName('새싹');
+    final exprPado = _exprForName('파도');
+    final exprIseul = _exprForName('이슬');
+    final exprBaram = _exprForName('바람');
+
     if(_connecting){
       return const Scaffold(body: Center(child: CircularProgressIndicator(strokeWidth: 2,),),);
     }
@@ -313,79 +654,184 @@ void _announceMe() {
             ),
           ),
 
+          // // --- 참가자들 ---
+          // ParticipantAvatar(
+          //   name: '새싹',
+          //   image: 'assets/images/group/saessak.png',
+          //   turnImage: 'assets/images/group/saessak_turn.png',
+          //   turn: turn,
+          //   top: turn == '새싹' ? 255.w : 275.w,
+          //   left: 0,
+          //   right: 0,
+          //   badge: '새싹' == myName? _myBadge: null,
+          //   arOn : _tracker.arOn && ('새싹'==myName),
+          //   isSelf: '새싹'==myName,
+          // ),
+          // ParticipantAvatar(
+          //   name: '파도',
+          //   image: 'assets/images/group/pado.png',
+          //   turnImage: 'assets/images/group/pado_turn.png',
+          //   turn: turn,
+          //   top: turn == '파도' ? 354.w : 374.w,
+          //   left: 250.w,
+          //   right: 0,
+          //   badge: '파도' == myName? _myBadge: null,
+          //   arOn : _tracker.arOn && ('파도'==myName),
+          //   isSelf: '파도'==myName,
+          // ),
+
+          // // ⭐ 내 아바타만 실시간 표정 덮어쓰기
+          // ValueListenableBuilder(
+          //   valueListenable: _tracker.expression,
+          //   builder: (context, exp, _) {
+          //     return ParticipantAvatar(
+          //       name: '나비',
+          //       image: 'assets/images/group/nabi.png',
+          //       turnImage: 'assets/images/group/nabi_turn.png',
+          //       turn: turn,
+          //       top: turn == '나비' ? 354.w : 374.w,
+          //       left: 0,
+          //       right: 250.w,
+          //       badge: '나비' == myName? _myBadge: null,
+          //       arOn : _tracker.arOn && ('나비'==myName),
+          //       isSelf: '나비'==myName,
+          //       mouthStateOverride: exp.mouth,
+          //       mouthOpenRatioOverride: exp.mouthOpenRatio,
+          //       leftEyeOpenOverride: exp.leftEyeOpen,
+          //       rightEyeOpenOverride: exp.rightEyeOpen,
+          //     );
+          //   },
+          // ),
+
+          // ParticipantAvatar(
+          //   name: '이슬',
+          //   image: 'assets/images/group/iseul.png',
+          //   turnImage: 'assets/images/group/iseul_turn.png',
+          //   turn: turn,
+          //   top: turn == '이슬' ? 495.w : 510.w,
+          //   left: 140.w,
+          //   right: 0,
+          //   badge: '이슬' == myName? _myBadge: null,
+          //   arOn : _tracker.arOn && ('이슬'==myName),
+          //   isSelf: '이슬'==myName,
+          // ),
+          // ParticipantAvatar(
+          //   name: '바람',
+          //   image: 'assets/images/group/baram.png',
+          //   turnImage: 'assets/images/group/baram_turn.png',
+          //   turn: turn,
+          //   top: turn == '바람' ? 485.w : 500.w,
+          //   left: 0,
+          //   right: 150.w,
+          //   badge: '바람' == myName? _myBadge: null,
+          //   arOn : _tracker.arOn && ('바람'==myName),
+          //   isSelf: '바람'==myName,
+          // ),
           // --- 참가자들 ---
-          ParticipantAvatar(
-            name: '새싹',
-            image: 'assets/images/group/saessak.png',
-            turnImage: 'assets/images/group/saessak_turn.png',
-            turn: turn,
-            top: turn == '새싹' ? 255.w : 275.w,
-            left: 0,
-            right: 0,
-            badge: '새싹' == myName? _myBadge: null,
-            arOn : _tracker.arOn && ('새싹'==myName),
-            isSelf: '새싹'==myName,
-          ),
-          ParticipantAvatar(
-            name: '파도',
-            image: 'assets/images/group/pado.png',
-            turnImage: 'assets/images/group/pado_turn.png',
-            turn: turn,
-            top: turn == '파도' ? 354.w : 374.w,
-            left: 250.w,
-            right: 0,
-            badge: '파도' == myName? _myBadge: null,
-            arOn : _tracker.arOn && ('파도'==myName),
-            isSelf: '파도'==myName,
-          ),
+// --- 참가자들 ---
 
-          // ⭐ 내 아바타만 실시간 표정 덮어쓰기
-          ValueListenableBuilder(
-            valueListenable: _tracker.expression,
-            builder: (context, exp, _) {
-              return ParticipantAvatar(
-                name: '나비',
-                image: 'assets/images/group/nabi.png',
-                turnImage: 'assets/images/group/nabi_turn.png',
-                turn: turn,
-                top: turn == '나비' ? 354.w : 374.w,
-                left: 0,
-                right: 250.w,
-                badge: '나비' == myName? _myBadge: null,
-                arOn : _tracker.arOn && ('나비'==myName),
-                isSelf: '나비'==myName,
-                mouthStateOverride: exp.mouth,
-                mouthOpenRatioOverride: exp.mouthOpenRatio,
-                leftEyeOpenOverride: exp.leftEyeOpen,
-                rightEyeOpenOverride: exp.rightEyeOpen,
-              );
-            },
-          ),
+// // 1) 새싹 (피어 표현 반영)
+// ParticipantAvatar(
+//   name: '새싹',
+//   image: 'assets/images/group/saessak.png',
+//   turnImage: 'assets/images/group/saessak_turn.png',
+//   turn: turn,
+//   top: turn == '새싹' ? 255.w : 275.w,
+//   left: 0,
+//   right: 0,
+//   badge: '새싹' == myName ? _myBadge : null,
+//   arOn: _tracker.arOn && ('새싹' == myName),
+//   isSelf: '새싹' == myName,
+//   mouthStateOverride: exprSaessak?.mouth,
+//   mouthOpenRatioOverride: exprSaessak?.mouthOpenRatio,
+//   leftEyeOpenOverride: exprSaessak?.leftEyeOpen,
+//   rightEyeOpenOverride: exprSaessak?.rightEyeOpen,
+// ),
 
-          ParticipantAvatar(
-            name: '이슬',
-            image: 'assets/images/group/iseul.png',
-            turnImage: 'assets/images/group/iseul_turn.png',
-            turn: turn,
-            top: turn == '이슬' ? 495.w : 510.w,
-            left: 140.w,
-            right: 0,
-            badge: '이슬' == myName? _myBadge: null,
-            arOn : _tracker.arOn && ('이슬'==myName),
-            isSelf: '이슬'==myName,
-          ),
-          ParticipantAvatar(
-            name: '바람',
-            image: 'assets/images/group/baram.png',
-            turnImage: 'assets/images/group/baram_turn.png',
-            turn: turn,
-            top: turn == '바람' ? 485.w : 500.w,
-            left: 0,
-            right: 150.w,
-            badge: '바람' == myName? _myBadge: null,
-            arOn : _tracker.arOn && ('바람'==myName),
-            isSelf: '바람'==myName,
-          ),
+// // 2) 파도 (피어 표현 반영)
+// ParticipantAvatar(
+//   name: '파도',
+//   image: 'assets/images/group/pado.png',
+//   turnImage: 'assets/images/group/pado_turn.png',
+//   turn: turn,
+//   top: turn == '파도' ? 354.w : 374.w,
+//   left: 250.w,
+//   right: 0,
+//   badge: '파도' == myName ? _myBadge : null,
+//   arOn: _tracker.arOn && ('파도' == myName),
+//   isSelf: '파도' == myName,
+//   mouthStateOverride: exprPado?.mouth,
+//   mouthOpenRatioOverride: exprPado?.mouthOpenRatio,
+//   leftEyeOpenOverride: exprPado?.leftEyeOpen,
+//   rightEyeOpenOverride: exprPado?.rightEyeOpen,
+// ),
+
+// // 3) 나비 = ✅ "내 아바타"만 실시간 리빌드 (ValueListenableBuilder)
+// ValueListenableBuilder(
+//   valueListenable: _tracker.expression,
+//   builder: (context, exp, _) {
+//     // 좌표/사이즈 절대 동일 유지 (이전 코드 그대로)
+//     return ParticipantAvatar(
+//       name: '나비',
+//       image: 'assets/images/group/nabi.png',
+//       turnImage: 'assets/images/group/nabi_turn.png',
+//       turn: turn,
+//       top: turn == '나비' ? 354.w : 374.w,
+//       left: 0,
+//       right: 250.w,
+//       badge: '나비' == myName ? _myBadge : null,
+//       arOn: _tracker.arOn && ('나비' == myName),
+//       isSelf: '나비' == myName,
+//       // 내 표정은 여기서 직접 주입 (리슨너가 매 프레임 리빌드)
+//       mouthStateOverride: exp.mouth,
+//       mouthOpenRatioOverride: exp.mouthOpenRatio,
+//       leftEyeOpenOverride: exp.leftEyeOpen,
+//       rightEyeOpenOverride: exp.rightEyeOpen,
+//     );
+//   },
+// ),
+
+// // 4) 이슬 (피어 표현 반영)
+// ParticipantAvatar(
+//   name: '이슬',
+//   image: 'assets/images/group/iseul.png',
+//   turnImage: 'assets/images/group/iseul_turn.png',
+//   turn: turn,
+//   top: turn == '이슬' ? 495.w : 510.w,
+//   left: 140.w,
+//   right: 0,
+//   badge: '이슬' == myName ? _myBadge : null,
+//   arOn: _tracker.arOn && ('이슬' == myName),
+//   isSelf: '이슬' == myName,
+//   mouthStateOverride: exprIseul?.mouth,
+//   mouthOpenRatioOverride: exprIseul?.mouthOpenRatio,
+//   leftEyeOpenOverride:exprIseul?.leftEyeOpen,
+//   rightEyeOpenOverride: exprIseul?.rightEyeOpen,
+// ),
+
+// // 5) 바람 (피어 표현 반영)
+// ParticipantAvatar(
+//   name: '바람',
+//   image: 'assets/images/group/baram.png',
+//   turnImage: 'assets/images/group/baram_turn.png',
+//   turn: turn,
+//   top: turn == '바람' ? 485.w : 500.w,
+//   left: 0,
+//   right: 150.w,
+//   badge: '바람' == myName ? _myBadge : null,
+//   arOn: _tracker.arOn && ('바람' == myName),
+//   isSelf: '바람' == myName,
+//   mouthStateOverride: exprBaram?.mouth,
+//   mouthOpenRatioOverride: exprBaram?.mouthOpenRatio,
+//   leftEyeOpenOverride: exprBaram?.leftEyeOpen,
+//   rightEyeOpenOverride: exprBaram?.rightEyeOpen,
+// ),
+        // --- 참가자들 (순서/좌표 동일 유지) ---
+        _renderAvatar('새싹'),
+        _renderAvatar('파도'),
+        _renderAvatar('나비'),
+        _renderAvatar('이슬'),
+        _renderAvatar('바람'),
 
           // 하단 컨트롤 바
           Positioned(
@@ -407,6 +853,8 @@ void _announceMe() {
                     _myBadge = e;
                     _badgeOpacity = 1.0; // 처음엔 보여지도록
                   });
+
+                  _sendJson({'t':'badge','value':e},reliability: Reliability.reliable);
 
                   Future.delayed(const Duration(seconds: 4), () {
                     if (mounted && _myBadge == e) {
