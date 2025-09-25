@@ -389,15 +389,12 @@ class _GroupLobbyBodyState extends State<_GroupLobbyBody> {
   }
 
   void _goNext() {
-    if (_selectedIndex < 0) return;
-    final topic = _topics[_selectedIndex];
-
     Navigator.push(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) => GroupRoomPage(topic: topic),
-        transitionDuration: const Duration(milliseconds: 220),
-        reverseTransitionDuration: const Duration(milliseconds: 180),
+        pageBuilder: (_, __, ___) => const GroupRoomPage(topic: '그룹'),
+        transitionDuration: Duration(milliseconds: 220),
+        reverseTransitionDuration: Duration(milliseconds: 180),
         transitionsBuilder: (_, a, __, child) => FadeTransition(opacity: a, child: child),
       ),
     );

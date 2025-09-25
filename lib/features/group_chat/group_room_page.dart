@@ -1,10 +1,13 @@
 // lib/features/group_chat/group_room_page.dart
+import 'dart:convert';
+
 import 'package:blurr/features/group_chat/control_bar.dart';
 import 'package:blurr/features/group_chat/group_room_done.dart';
-import 'package:blurr/features/group_chat/mouth_state.dart';
 import 'package:blurr/features/group_chat/participant_avatar.dart';
 import 'package:blurr/features/group_chat/participant_row.dart';
 import 'package:blurr/features/group_chat/session_info_card.dart';
+import 'package:blurr/livekit/audio_room_controller.dart';
+import 'package:blurr/net/group_api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
@@ -18,7 +21,7 @@ class GroupRoomPage extends StatefulWidget {
   const GroupRoomPage({
     super.key,
     required this.topic,
-    this.turn = "바람",
+    this.turn = "",
     this.myTurn = false,
   });
 
@@ -29,7 +32,7 @@ class GroupRoomPage extends StatefulWidget {
 class _GroupRoomPageState extends State<GroupRoomPage> {
   // === 단순 상태 ===
   String turn = "새싹";
-  final String myName = "나비";
+  String myName = "";
   String? _myBadge = '';
   final List<String> _emojis = const ['☀️','☁️','☔️','⚡️','🌪️','🌈','❄️'];
   final Map<String, List<String>> emojiSets = {
@@ -40,6 +43,9 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
     '공감': ['🫂','🤝','🙌','💖','👂','😔','🫶'],
   };
   double _badgeOpacity = 1.0;
+  final _audio = AudioRoomController();
+  bool _connecting = true;
+  static const String kRoomName = 'kim-sangdam';
 
   // === AR 서비스 ===
   final FaceTrackerService _tracker = FaceTrackerService();
@@ -48,7 +54,137 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
   void initState() {
     super.initState();
     _initAr();
+    _connect();
   }
+  Future<void> _connect() async {
+  setState(() => _connecting = true);
+  try {
+    final api = GroupApiClient('https://blurr.world');
+
+    // 1) 같은 이름의 활성 방 최신순으로 뽑기
+    final all = await api.listRooms();
+    final candidates = all
+        .where((e) => e['roomName'] == kRoomName && e['active'] == true)
+        .toList()
+      ..sort((a, b) => (b['id'] as int).compareTo(a['id'] as int));
+
+    Map<String, dynamic>? joinData;
+    int? pickedId;
+
+    // 2) 차례대로 tryJoin (정원 초과 ER002면 다음 후보로)
+    for (final r in candidates) {
+      final rid = (r['id'] as num).toInt();
+      final res = await api.tryJoin(rid);
+      if (res['ok'] == true) {
+        joinData = res['data'] as Map<String, dynamic>;
+        pickedId = rid;
+        break;
+      }
+      if (res['code'] != 'ER002') {
+        throw 'POST /rooms/$rid/join -> ${res['status']}: ${res['message']}';
+      }
+    }
+
+    // 3) 전부 만석이면 새 방 생성 → 조인
+    if (joinData == null) {
+      final created = await api.addRoomFull(kRoomName, duration: 'MIN15', maxCap: 8);
+      if (created['ok'] != true) {
+        throw 'POST /rooms/add -> ${created['status']}: ${created['message']}';
+      }
+      pickedId = created['roomId'] as int;
+      final res = await api.tryJoin(pickedId!);
+      if (res['ok'] != true) {
+        throw 'POST /rooms/$pickedId/join -> ${res['status']}: ${res['message']}';
+      }
+      joinData = res['data'] as Map<String, dynamic>;
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('기존 방이 만석이라 새 방을 열었습니다.')),
+        );
+      }
+    }
+
+    // 4) LiveKit connect (+ randomName UI 반영)
+    // joinData 확보 후
+    final wsUrl = '${joinData['wsUrl']}';
+    final token = '${joinData['token']}';
+
+    // 1순위: 응답 바디의 randomName
+    String? rn = joinData['randomName'] as String?;
+    // 2순위: JWT에서 randomName/name (혹시 바디에 없을 때 대비)
+    rn ??= _extractNameFromJwt(token);
+
+    // 여기서 즉시 반영!  (connect 전에)
+    if (rn != null && mounted) {
+      setState(() => myName = rn!);
+    }
+
+    // 그리고 나서 LiveKit 연결
+    await _audio.connect(wsUrl: wsUrl, token: token);
+
+        // 선택: 입장 직후 내 닉네임 브로드캐스트 (타인 표시명 동기화용)
+        _announceMe();
+
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('입장 실패: $e')));
+      Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _connecting = false);
+    }
+  }
+
+// GroupRoomPageState
+bool _leaving = false;
+
+Future<void> _leaveRoomAndExit() async {
+  if (_leaving) return;               // 중복 탭 방지
+  setState(() => _leaving = true);
+
+  try {
+    // 1) LiveKit 끊기 (타임아웃 가드)
+    await _audio.disconnect().timeout(const Duration(seconds: 3), onTimeout: () {});
+
+    // 2) AR 멈추기 (이미 dispose에서도 하지만, 즉시 끊어주는 편이 깔끔)
+    await _tracker.stop();
+  } catch (_) {
+    // 굳이 에러를 막 표출하진 않고, 로그만 남기고 진행해도 OK
+  } finally {
+    if (!mounted) return;
+    // 3) 화면 전환
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => const GroupDone(),
+        transitionDuration: const Duration(milliseconds: 220),
+        reverseTransitionDuration: const Duration(milliseconds: 180),
+        transitionsBuilder: (_, a, __, child) => FadeTransition(opacity: a, child: child),
+      ),
+    );
+  }
+}
+String? _extractNameFromJwt(String jwt) {
+  try {
+    final parts = jwt.split('.');
+    if (parts.length != 3) return null;
+    final normalized = base64Url.normalize(parts[1]);
+    final payload = json.decode(utf8.decode(base64Url.decode(normalized))) as Map<String, dynamic>;
+
+    // 서버가 randomName를 주는 게 우선, 없으면 name fallback
+    return (payload['randomName'] as String?) ?? (payload['name'] as String?);
+  } catch (_) {
+    return null;
+  }
+}
+
+
+
+void _announceMe() {
+  // 데이터채널로 {t:'who', name:'...'} 한번 보내는 로직을 여기에 (앞서 안내했던 방식)
+}
+
+
 
   Future<void> _initAr() async {
     await _tracker.init();
@@ -59,7 +195,9 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
 
   @override
   void dispose() {
+    _tracker.stop();
     _tracker.dispose();
+    _audio.disconnect();
     super.dispose();
   }
 
@@ -70,6 +208,9 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
 
   @override
   Widget build(BuildContext context) {
+    if(_connecting){
+      return const Scaffold(body: Center(child: CircularProgressIndicator(strokeWidth: 2,),),);
+    }
     return Scaffold(
       body: Stack(
         children: [
@@ -89,9 +230,9 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
             child: Center(
               child: Column(
                 children: [
-                  const SessionInfoCard(
+                  SessionInfoCard(
                     text:
-                        '이번 세션의 당신의 닉네임은 나비입니다. 그룹 대화 방에서는 음성과 표정으로 소통할 수 있습니다.',
+                        '이번 세션의 당신의 닉네임은 ${myName.isEmpty?"...":myName}입니다. 그룹 대화 방에서는 음성과 표정으로 소통할 수 있습니다.',
                   ),
                   SizedBox(height: 11.h),
                   ParticipantsRow(
@@ -289,20 +430,7 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
             left: 23.w,
             top: 53.h,
             child: GestureDetector(
-              onTap:(){
-                Navigator.pushReplacement(
-                    context,
-                    PageRouteBuilder(
-                      pageBuilder: (_, __, ___) => const GroupDone(),
-                      transitionDuration: const Duration(milliseconds: 220),
-                      reverseTransitionDuration:
-                          const Duration(milliseconds: 180),
-                      transitionsBuilder: (_, a, __, child) =>
-                          FadeTransition(opacity: a, child: child),
-                    ),
-                  );
-
-              },
+              onTap:_leaveRoomAndExit,
               child: SizedBox(
                 width: 44.w,
                 height: 44.w,

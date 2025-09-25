@@ -1526,17 +1526,23 @@ Future<void> _toggleAR() async {
     );
   }
 
-  Widget _remoteVideoBox() {
-    final track = _lk?.firstRemoteVideoTrack();
-    if (track == null) return Container(color: Colors.black);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10.w),
-      child: VideoTrackRenderer(
-        track,
-        fit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
-      ),
-    );
-  }
+Widget _remoteVideoBox() {
+  return ValueListenableBuilder<VideoTrack?>(
+    valueListenable: _lk!.remoteVideoTrack,
+    builder: (context, track, _) {
+      if (track == null) {
+        return Container(color: Colors.black);
+      }
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10.w),
+        child: VideoTrackRenderer(
+          track,
+          fit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
+        ),
+      );
+    },
+  );
+}
 
   // ───────── Scaffold ─────────
   @override
