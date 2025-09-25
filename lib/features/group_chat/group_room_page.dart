@@ -387,6 +387,13 @@ void initState() {
   _wireExpressionBroadcast(); // 내 표정 주기 송출(60~100ms)
 
   _connect();  // 아래 3 참고: 여기서 _selfIdentity 채우기
+  _flow.activeName.addListener(() {
+    if (!mounted) return;
+    setState(() {
+      turn = _flow.activeName.value; // state 갱신 -> 아바타 포함 전체 리빌드
+    });
+  });
+
 }
 
 
@@ -614,7 +621,7 @@ String? _extractNameFromJwt(String jwt) {
                     valueListenable: _flow.activeName,
                     builder: (_, active, __) {
                       // _flow.activeName과 화면의 turn 문자열을 일치시켜 아바타도 하이라이트를 맞추고 싶다면:
-                      turn = active; // 필요 시 상태 변수에 동기화
+                      // turn = active; // 필요 시 상태 변수에 동기화
                       return ParticipantsRow(
                         participants: _displayNames,
                         activeName: active,
