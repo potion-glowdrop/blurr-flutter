@@ -40,6 +40,10 @@ class _GroupRoomPageState extends State<GroupRoomPage> {
   // id <-> name
   final Map<String, String> _id2name = {};
   final Map<String, String> _name2id = {};
+  // 클래스 필드
+final Map<String, String?> _peerBadgeById = {}; // id -> badge(이모지)
+final Map<String, Timer> _peerBadgeTimers = {}; // id -> auto-hide timer  ✅ 추가
+
 // GroupRoomPageState 내부
 late SessionFlowController _flow;
 
@@ -230,7 +234,7 @@ Widget _renderPeerAvatar(String name, {
   );
 }
   // 클래스 필드에 추가
-  final Map<String, String?> _peerBadgeById = {}; // id -> badge(이모지)
+  // final Map<String, String?> _peerBadgeById = {}; // id -> badge(이모지)
 
   // 수신한 피어 표정 찾기 (id↔name 매핑은 onData(who)에서 채움)
   FaceExpression? _exprForName(String name){
@@ -251,6 +255,16 @@ Widget _renderPeerAvatar(String name, {
     '에너지': ['💪','😴','🥱','🤯','🔥','🌱','🚀'],
     '공감': ['🫂','🤝','🙌','💖','👂','😔','🫶'],
   };
+  // 질문별 커스텀 이모지 (prompts 길이와 맞추면 좋음)
+  final List<List<String>> _emojiByQuestion = [
+    // Q1: 색/표현
+    ['🩷','❤️','💛','💚','💙','🖤','🤍'],
+    // Q2: 감정
+    ['😊','😢','😡','😰','😌','😐','😭'],
+    // Q3: 연결/공감
+    ['👍','😡','🥺','♥️','🕺','💧','🌝'],
+  ];
+
   double _badgeOpacity = 1.0;
   final _audio = AudioRoomController();
   bool _connecting = true;
@@ -308,20 +322,54 @@ Widget _renderPeerAvatar(String name, {
 void initState() {
   super.initState();
 
+  // _flow = SessionFlowController(
+  //   participants: _displayNames,
+  //   plan: const SessionPlan(
+  //     prompts: [
+  //       '요즘 나의 마음을 색으로 표현한다면 어떤 색일까요?',
+  //       '취업 준비 과정에서 가장 자주 느끼는 감정은 무엇인가요?',
+  //       '‘나 혼자가 아니구나’라고 느낀 순간은 언제였나요?'
+  //     ],
+  //     openingSec: 15,
+  //     promptSec: 15,
+  //     answerSec: 40,
+  //     closingSec: 15,
+  //   ),
+  // );
   _flow = SessionFlowController(
-    participants: _displayNames,
-    plan: const SessionPlan(
-      prompts: [
-        '최근 가장 힘들었던 순간은 언제였나요?',
-        '지금 나에게 가장 필요한 도움이 있다면?',
-        '한 주를 버티게 한 작은 감사 한 가지는?'
-      ],
-      openingSec: 15,
-      promptSec: 15,
-      answerSec: 40,
-      closingSec: 15,
-    ),
-  );
+  participants: _displayNames,
+  plan: const SessionPlan(
+    prompts: [
+      '요즘 나의 마음을 색으로 표현한다면 어떤 색일까요?',
+      '취업 준비 과정에서 가장 자주 느끼는 감정은 무엇인가요?',
+      '‘나 혼자가 아니구나’라고 느낀 순간은 언제였나요?',
+    ],
+    // 1) 오프닝을 여러 파트로 분할 (UI 길이 문제 해결)
+    openingParts: [
+      '안녕하세요. 오늘 함께 자리해주셔서 반갑습니다.이 방은 ‘취업 스트레스와 마음건강’이라는 주제로, 서로의 경험을 나누는 시간이에요.',
+      '여기서는 평가나 조언보다, 있는 그대로의 이야기를 존중하는 것이 가장 중요합니다.혹시 대답하기 어려운 질문이 나오면 ‘패스’하셔도 괜찮습니다.',
+      '그럼 첫 번째 질문으로 시작해볼게요.',
+    ],
+    openingPartSec: 6,   // 파트당 표시 시간
+
+    // 2) 질문 공지 시간(질문만 표시)
+    promptSec: 12,
+
+    // 3) 각 사람 답변 시간
+    answerSec: 40,
+
+    // 4) 질문 종료 후 wrap-up 단계
+    wrapupSec: 6,
+    wrapups: [
+      '색으로 표현된 마음들을 들으니, 지금 우리가 서로 다른 자리에서 같은 고민을 하고 있다는 게 전해집니다.',
+      '말씀해주신 감정들이 다르지만, 다들 이 시간을 견뎌내고 있다는 게 느껴졌어요.',
+      '서로 다른 순간들이지만, 결국 ‘나만 그런 게 아니구나’ 하는 마음이 우리를 연결해 주는 것 같아요.',
+    ],
+
+    closingSec: 12,
+  ),
+);
+
   _audio.onData = ({
     required String fromIdentity,
     required Map<String, dynamic> payload,
@@ -342,12 +390,31 @@ void initState() {
       }
       break;
     }
-    case 'badge': {
-      final b = payload['value'] as String?;
-      _peerBadgeById[fromIdentity] = (b != null && b.trim().isNotEmpty) ? b : null;
-      if (mounted) setState(() {}); // 드물게 바뀌니 setState로 충분
-      break;
+  case 'badge': {
+    final b = payload['value'] as String?;
+    final trimmed = (b != null && b.trim().isNotEmpty) ? b.trim() : null;
+
+    // 현재 배지 반영
+    _peerBadgeById[fromIdentity] = trimmed;
+    if (mounted) setState(() {});
+
+    // 기존 타이머 있으면 취소
+    _peerBadgeTimers[fromIdentity]?.cancel();
+    _peerBadgeTimers.remove(fromIdentity);
+
+    if (trimmed != null) {
+      // 5초 뒤 자동 제거 (변경 없을 때만 제거)
+      _peerBadgeTimers[fromIdentity] = Timer(const Duration(seconds: 5), () {
+        if (_peerBadgeById[fromIdentity] == trimmed) {
+          _peerBadgeById[fromIdentity] = null;
+          if (mounted) setState(() {});
+        }
+        _peerBadgeTimers.remove(fromIdentity);
+      });
     }
+    break;
+  }
+
 
       case 'ar': {
         // 필요 시 상태 반영
@@ -556,14 +623,19 @@ String? _extractNameFromJwt(String jwt) {
 
   @override
   void dispose() {
-    for(final n in _peerNoti.values){n.dispose();}
+    for (final n in _peerNoti.values) { n.dispose(); }
     _peerNoti.clear();
+
+    for (final t in _peerBadgeTimers.values) { t.cancel(); }
+    _peerBadgeTimers.clear();
+
     _audio.onData = null;
     _tracker.stop();
     _tracker.dispose();
     _audio.disconnect();
     super.dispose();
   }
+
 
   Future<void> _toggleAr() async {
     await _tracker.toggle();
@@ -607,7 +679,8 @@ String? _extractNameFromJwt(String jwt) {
                     builder: (_, txt, __) {
                       final nick = (myName.isEmpty ? '...' : myName);
                       return SessionInfoCard(
-                        text: '이번 세션의 당신의 닉네임은 $nick 입니다. ${txt.isEmpty ? "" : txt}',
+                        text: txt.isEmpty ? "" : txt,
+                        // text: '이번 세션의 당신의 닉네임은 $nick 입니다. ${txt.isEmpty ? "" : txt}',
                       );
                     },
                   ),
@@ -897,45 +970,95 @@ String? _extractNameFromJwt(String jwt) {
         _renderAvatar('이슬'),
         _renderAvatar('바람'),
 
-          // 하단 컨트롤 바
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: ControlBar(
-                myTurn: turn == myName,
-                arOn: _tracker.arOn,
-                onToggleAr: _toggleAr,
-                onPass: () {},        
-                onProlong: () {},     
-                onEnd: () {},
-                emojis : emojiSets['감정']!,
-                selectedEmoji: _myBadge,
-                onEmojiSelected: (e) {
-                  setState(() {
-                    _myBadge = e;
-                    _badgeOpacity = 1.0; // 처음엔 보여지도록
-                  });
+          // // 하단 컨트롤 바
+          // Positioned(
+          //   bottom: 0,
+          //   left: 0,
+          //   right: 0,
+          //   child: Center(
+          //     child: ControlBar(
+          //       myTurn: turn == myName,
+          //       arOn: _tracker.arOn,
+          //       onToggleAr: _toggleAr,
+          //       onPass: () {},        
+          //       onProlong: () {},     
+          //       onEnd: () {},
+          //       emojis : emojiSets['감정']!,
+          //       selectedEmoji: _myBadge,
+          //       onEmojiSelected: (e) {
+          //         setState(() {
+          //           _myBadge = e;
+          //           _badgeOpacity = 1.0; // 처음엔 보여지도록
+          //         });
 
-                  _sendJson({'t':'badge','value':e},reliability: Reliability.reliable);
+          //         _sendJson({'t':'badge','value':e},reliability: Reliability.reliable);
 
-                  Future.delayed(const Duration(seconds: 4), () {
-                    if (mounted && _myBadge == e) {
-                      setState(() => _badgeOpacity = 0.0); // 서서히 사라지게
-                    }
-                  });
+          //         Future.delayed(const Duration(seconds: 4), () {
+          //           if (mounted && _myBadge == e) {
+          //             setState(() => _badgeOpacity = 0.0); // 서서히 사라지게
+          //           }
+          //         });
 
-                  Future.delayed(const Duration(seconds: 5), () {
-                    if (mounted && _myBadge == e) {
-                      setState(() => _myBadge = null); // 완전히 제거
-                    }
-                  });
-                }
+          //         Future.delayed(const Duration(seconds: 5), () {
+          //           if (mounted && _myBadge == e) {
+          //             setState(() => _myBadge = null); // 완전히 제거
+          //           }
+          //         });
+          //       }
                 
-              ),
-            ),
-          ),
+          //     ),
+          //   ),
+          // ),
+          // 하단 컨트롤 바 위치 교체
+Positioned(
+  bottom: 0, left: 0, right: 0,
+  child: Center(
+    child: ValueListenableBuilder<int>(
+      valueListenable: _flow.questionIndex,
+      builder: (_, qIdx, __) {
+        return ValueListenableBuilder<SessionStage>(
+          valueListenable: _flow.stage,
+          builder: (_, stg, __) {
+            // 오프닝/클로징에선 이모지바 숨기고 싶다면:
+            final bool showEmojiBar = (stg != SessionStage.opening && stg != SessionStage.closing);
+
+            // 질문 인덱스에 맞는 이모지 선택 (없으면 기본 세트)
+            List<String> currentEmojis;
+            if (qIdx >= 0 && qIdx < _emojiByQuestion.length) {
+              currentEmojis = _emojiByQuestion[qIdx];
+            } else {
+              currentEmojis = emojiSets['감정']!; // fallback
+            }
+
+            return ControlBar(
+              myTurn: turn == myName,
+              arOn: _tracker.arOn,
+              onToggleAr: _toggleAr,
+              onPass: () {},
+              onProlong: () {},
+              onEnd: () {},
+              showEmojiBar: showEmojiBar,
+              emojis: currentEmojis,             // ✅ 질문별 이모지 주입
+              selectedEmoji: _myBadge,
+              onEmojiSelected: (e) {
+                setState(() {
+                  _myBadge = e;
+                });
+                _sendJson({'t':'badge','value':e}, reliability: Reliability.reliable);
+
+                // 내 배지 자동 숨김 유지
+                Future.delayed(const Duration(seconds: 5), () {
+                  if (mounted && _myBadge == e) setState(() => _myBadge = null);
+                });
+              },
+            );
+          },
+        );
+      },
+    ),
+  ),
+),
+
 
           // 뒤로가기
           Positioned(
