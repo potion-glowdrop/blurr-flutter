@@ -12,10 +12,10 @@
  
 ## 🎬 시연 영상
 
-[![Blurr Demo](thumbnail2.png)](https://youtu.be/vy2XUe4bkto?si=yJ83HlTcvza6pVfU)
+[![Blurr Demo](thumbnail2.png)](https://youtu.be/vy2XUe4bkto)
 
 <p align="center">
-  <a href="https://youtu.be/vy2XUe4bkto?si=yJ83HlTcvza6pVfU">
+  <a href="https://youtu.be/vy2XUe4bkto">
     👉 동영상으로 시연 보기
   </a>
 </p>
